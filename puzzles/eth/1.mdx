@@ -1,0 +1,77 @@
+import { BadgeCheck, Github, PenTool, PencilRuler } from "lucide-react";
+
+import { getBaseMetadata } from "@/lib/utils";
+
+import PhaseTable from "@/components/common/phase-table";
+
+export const description =
+  "A CTF protocol, where players create and solve EVM puzzles to earn NFTs.";
+
+export const metadata = getBaseMetadata({
+  title: "Puzzles Overview",
+  description,
+  titleTemplate: "%s | Curta Docs",
+  image: `/docs/og/?slug=/docs/puzzles/overview&description=${description}`,
+});
+
+# Puzzles Overview
+
+<Description children={description} />
+
+## Introduction
+
+A puzzle becomes available to solve by anyone as soon as an author adds it to the [Curta contract](/docs/contracts#curta-puzzles). When a player submits a valid solution, a [Flag](/docs/puzzles/submitting-solutions#flag-nfts) NFT is minted to the solver, and they earn [points](/docs/leaderboard), which are used to place them on the [leaderboard](/leaderboard).
+
+## Submission period
+
+Immediately after a puzzle is added, the puzzle enters **Phase 0**, the period where nobody has solved the puzzle yet. Then, as players solve the puzzle, it progresses through 4 Phases:
+
+<PhaseTable />
+
+Simply put, each puzzle's submission period lasts from the time it's added until 5 days after the first valid solution is submitted (aka **First Blood**).
+
+## Generative puzzles
+
+<Callout>
+  Every puzzle must implement a `generate(address)` function, which takes in the
+  user's address as a seed and returns a unique starting position. This way,
+  each puzzle is _generative_, and each solution is unique to the solver.
+</Callout>
+
+Since the protocol is 100% onchain, every submission is public. The generative aspect prevents front-running and allows for multiple winners: even if you see someone else's solution, you still have to figure out what the rules/constraints of the puzzle are and solve it from _your_ starting position.
+
+To put it more rigorously, the [`solve` function](https://github.com/waterfall-mkt/curta/blob/2d5de33e3e08ff478ad9e33b6a6f00f819224122/src/Curta.sol#L107) on [Curta](/docs/contracts#curta-puzzles) requires the following to return `true`:
+
+```sol showLineNumbers={false}
+puzzle.verify(
+    puzzle.generate(msg.sender), // Unique starting position, seeded by the address of the solver.
+    _solution
+)
+```
+
+## Learn more
+
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 min-[1120px]:grid-cols-2 min-[1420px]:grid-cols-3">
+  {[
+    {
+      name: "Submitting Solutions",
+      description: "Learn how to submit solutions.",
+      href: "/docs/puzzles/submitting-solutions",
+      icon: <BadgeCheck />,
+    },
+    {
+      name: "Becoming an Author",
+      description: "Learn how to become an author.",
+      href: "/docs/puzzles/becoming-an-author",
+      icon: <PenTool />,
+    },
+    {
+      name: "Writing Puzzles",
+      description: "Learn how to write and add a puzzle.",
+      href: "/docs/puzzles/writing-a-puzzle",
+      icon: <PencilRuler />,
+    },
+  ].map((item) => (
+    <LinkFeature key={item.href} {...item} />
+  ))}
+</div>
