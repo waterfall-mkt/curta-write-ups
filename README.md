@@ -11,7 +11,7 @@ Curta is a talent discovery competition platform and community of protocol engin
 ### Ethereum
 
 - [**Puzzle #1**](/blob/main/puzzles/eth/1.mdx) | [**Curta**](https://curta.wtf/puzzle/eth:1)
-- [**Puzzle #1**](/blob/main/puzzles/eth/2.mdx) | [**Curta**](https://curta.wtf/puzzle/eth:2)
+- [**Puzzle #2**](/blob/main/puzzles/eth/2.mdx) | [**Curta**](https://curta.wtf/puzzle/eth:2)
 
 ## Contributing (WIP)
 
