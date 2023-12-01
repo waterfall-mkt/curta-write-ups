@@ -105,18 +105,47 @@ This is very helpful because Sudoku is quite repetitive: for each row, column, a
 For example, for a subgrid, we'd want to shift by 4 bits, then 4, 20, 4, 4, 4, and 4 to read each square:
 
 <ComponentsDisplay>
-  <div className="flex flex-col items-center gap-2">
-    <div className="grid grid-cols-8 border-stroke bg-gray-600 border rounded-lg overflow-hidden text-gray-100 [&>*:nth-child(n+53):not(:nth-child(n+57):nth-child(-n+60))]:bg-blue-800 [&>*:nth-child(n+53):not(:nth-child(n+57):nth-child(-n+60))]:text-blue-200">
+  <div
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "0.5rem",
+    }}
+  >
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(8, 1fr)",
+        border: "1px solid #27303d",
+        backgroundColor: "#12161f",
+        borderRadius: "0.75rem",
+        overflow: "hidden",
+        color: "#c1cdd9",
+      }}
+    >
       {new Array(64).fill(null).map((_, i) => (
         <div
           key={i}
-          className="text-xs font-mono w-8 h-8 flex items-center justify-center"
+          style={{
+            fontSize: "0.75rem",
+            fontFamily: "Menlo, monospace",
+            width: "2rem",
+            height: "2rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: (i & 7) > 3 && i > 48 ? "#092e52" : "transparent",
+            color: (i & 7) > 3 && i > 48 ? "#7697ee" : "#c1cdd9",
+          }}
         >
           {252 - i * 4}
         </div>
       ))}
     </div>
-    <div className="text-sm text-gray-200">Numbers represent LSb positions</div>
+    <div style={{ fontSize: "0.875rem", color: "#758195" }}>
+      Numbers represent LSb positions
+    </div>
   </div>
 </ComponentsDisplay>
 
