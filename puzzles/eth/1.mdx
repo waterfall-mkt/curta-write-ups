@@ -1,65 +1,144 @@
 ---
 author: "0xA85572Cd96f1643458f17340b6f0D6549Af482F5"
-contributors:
-  [
-    "0xA85572Cd96f1643458f17340b6f0D6549Af482F5",
-    "0x655aF72e1500EB8A8d1c90856Ae3B8f148A78471",
-  ]
-adapted_from: "https://fiveoutofnine.com"
+contributors: ["0xA85572Cd96f1643458f17340b6f0D6549Af482F5"]
 ---
 
-## Introduction
+## Overview
 
-A puzzle becomes available to solve by anyone as soon as an author adds it to the [Curta contract](/docs/contracts#curta-puzzles). When a player submits a valid solution, a [Flag](/docs/puzzles/submitting-solutions#flag-nfts) NFT is minted to the solver, and they earn [points](/docs/leaderboard), which are used to place them on the [leaderboard](/leaderboard).
+The puzzle is basically 8 × 8 [Sudoku](https://en.wikipedia.org/wiki/Sudoku), where each solver is given a board randomly filled with numbers 1 to 8, and the solution is to fill the remaining squares such that each row, column, and 2 × 4 subgrid contain the numbers 1 through 8 once each.
 
-## Submission period
+## Generating the starting position
 
-Immediately after a puzzle is added, the puzzle enters **Phase 0**, the period where nobody has solved the puzzle yet. Then, as players solve the puzzle, it progresses through 4 Phases:
-
-Simply put, each puzzle's submission period lasts from the time it's added until 5 days after the first valid solution is submitted (aka **First Blood**).
-
-## Generative puzzles
-
-<Callout>
-  Every puzzle must implement a `generate(address)` function, which takes in the
-  user's address as a seed and returns a unique starting position. This way,
-  each puzzle is _generative_, and each solution is unique to the solver.
-</Callout>
-
-Since the protocol is 100% onchain, every submission is public. The generative aspect prevents front-running and allows for multiple winners: even if you see someone else's solution, you still have to figure out what the rules/constraints of the puzzle are and solve it from _your_ starting position.
-
-To put it more rigorously, the [`solve` function](https://github.com/waterfall-mkt/curta/blob/2d5de33e3e08ff478ad9e33b6a6f00f819224122/src/Curta.sol#L107) on [Curta](/docs/contracts#curta-puzzles) requires the following to return `true`:
+First, the `generate` function generates a seed by hashing the player's address.
 
 ```sol showLineNumbers={false}
-puzzle.verify(
-    puzzle.generate(msg.sender), // Unique starting position, seeded by the address of the solver.
-    _solution
-)
+uint256 seed = uint256(keccak256(abi.encodePacked(_seed)));
 ```
 
-## Learn more
+Then, the function loops through the seed until it's completely used up or 1 through 8 have each been assigned a unique, random index $\in [0, 63]$ on the board. To ensure each index is unique, we use a bitmap, where a `1` at the corresponding least significant bit (LSb) position indicates the index has been "seen"/used up.
 
-<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 min-[1120px]:grid-cols-2 min-[1420px]:grid-cols-3">
-  {[
-    {
-      name: "Submitting Solutions",
-      description: "Learn how to submit solutions.",
-      href: "/docs/puzzles/submitting-solutions",
-      icon: <div />,
-    },
-    {
-      name: "Becoming an Author",
-      description: "Learn how to become an author.",
-      href: "/docs/puzzles/becoming-an-author",
-      icon: <div />,
-    },
-    {
-      name: "Writing Puzzles",
-      description: "Learn how to write and add a puzzle.",
-      href: "/docs/puzzles/writing-a-puzzle",
-      icon: <div />,
-    },
-  ].map((item) => (
-    <LinkFeature key={item.href} {...item} />
-  ))}
-</div>
+```sol highlightLines={[3, 15]} showLineNumbers={false}
+// We use this to keep track of which indices [0, 63] have been filled. See the
+// next comment for why the value is initialized to `1 << 64`.
+uint256 bitmap = 1 << 64;
+// The bitmap only reserves bits in positions [0, 63] to represent the slots
+// that have been filled. Thus, 64 is a sentinel value that will always yield 1
+// when retrieved via `(bitmap >> index) & 1`, and it can be used as a sensible
+// default value before the next iteration of the `for` loop.
+uint256 index = 64;
+// We fill the puzzle randomly with 1 of [1, 8].
+for (uint256 i = 1; i < 9; ) {
+    // We have exhausted the seed, so stop iterating.
+    if (seed == 0) break;
+
+    // Loop through until we find an unfilled index.
+    while ((bitmap >> index) & 1 == 1 && seed != 0) {
+        // Retrieve 6 random bits from `seed` to determine which index to fill.
+        index = seed & 0x3f;
+        seed >>= 6;
+    }
+    // Set the bit in the bitmap to indicate that the index has been filled.
+    bitmap |= 1 << index;
+
+    // Place the number into the slot that was just filled.
+    puzzle |= (i << (index << 2));
+    index = 64;
+    unchecked {
+        ++i;
+    }
+}
+```
+
+<Callout intent="neutral">
+  See a deeper explanation of a simpler application of this technique
+  [here](https://twitter.com/fiveoutofnine/status/1631723555028348928).
+</Callout>
+
+By generating the starting position in such a way, every output _must_ have a valid solution.
+
+## Verifying Sudoku rules
+
+First, at each of the 64 squares, the `verify` function performs a few rudimentary checks:
+
+- No square must be empty.
+- Each non-empty square in the starting position must equal the square provided in the solution.
+
+```sol highlightLines={[3]} showLineNumbers={false}
+for (uint256 index; index < 256; index += 4) {
+    // Check that the starting position is included in the solution.
+    if (_start & 0xf != 0 && _start & 0xf != _solution & 0xf) return false;
+
+    _start >>= 4;
+    _solution >>= 4;
+}
+```
+
+Then, at each of the 64 squares, the function conditionally applies Sudoku rule checks via a helper `check` function, which checks if $[1, 8]$ are present given a set of 8 indices to look at.
+
+```sol highlightLines={[1, 8, 10]} showLineNumbers={false}
+function check(uint256 _shifted, uint256 _shifts) internal pure returns (bool) {
+    uint256 shifted = _shifted;
+    // Used to keep track of which numbers [1, 8] have been seen.
+    uint256 bitmap;
+
+    while (_shifts != 0) {
+        // Set the bit in the bitmap to indicate the number has been seen.
+        bitmap |= 1 << (_shifted & 0xf); // `shifted & 0xf` reads the number.
+        // Retrieve 6 bits from `_shifts` to read how many bits to shift by.
+        shifted >>= (_shifts & 0x3f);
+        _shifts >>= 6;
+    }
+
+    return bitmap = FILLED_BITMAP;
+}
+```
+
+<Callout intent="neutral">
+  `check` uses the same technique used in `generate`, except it can check the
+  existence of $[1, 8]$ in _any_ set of 8 indices by taking in a series of
+  shifts to apply after each iteration, rather than just shifting by 4 bits
+  every time.
+</Callout>
+
+This is very helpful because Sudoku is quite repetitive: for each row, column, and subgrid, we perform the same check. With the way the helper function is set up, we can do that easily by defining the index shifts to look at for a row, column, or subgrid.
+
+For example, for a subgrid, we'd want to shift by 4 bits, then 4, 20, 4, 4, 4, and 4 to read each square:
+
+<ComponentsDisplay>
+  <div className="flex flex-col items-center gap-2">
+    <div className="grid grid-cols-8 border-stroke bg-gray-600 border rounded-lg overflow-hidden">
+      {new Array(64).fill(null).map((_, i) => (
+        <div
+          key={i}
+          className={
+            "text-xs font-mono w-8 h-8 flex items-center justify-center" +
+            ((i & 7) > 3 && i > 48
+              ? " bg-blue-800 text-blue-200"
+              : " text-gray-100")
+          }
+        >
+          {252 - i * 4}
+        </div>
+      ))}
+    </div>
+    <div className="text-sm text-gray-200">Numbers represent LSb positions</div>
+  </div>
+</ComponentsDisplay>
+
+The final key is to apply the correct shifts at the correct indices. For example, applying `SUBGRID_SHIFTS` at index 4 would read a nonexistent subgrid because no subgrid starts from index 4. To achieve this, at each of the 64 squares, we retrieve a value from a bitpacked `uint256 CHECKS` of 4-bit words with the following meanings:
+
+- 0th LSb: whether to perform a subgrid check.
+- 1st LSb: whether to perform a column check.
+- 2nd LSb: whether to perform a row check.
+- 3rd LSb: empty bit.
+
+Then, we read which checks to perform via `& 7` and dispatch it with the respective constants into `check`.
+
+```sol showLineNumbers={false}
+uint256 checks = (CHECKS >> index) & 7;
+if (checks & 4 == 4 && !check(_solution, ROW_SHIFTS))     return false;
+if (checks & 2 == 2 && !check(_solution, COL_SHIFTS))     return false;
+if (checks & 1 == 1 && !check(_solution, SUBGRID_SHIFTS)) return false;
+```
+
+If all of these checks pass at every index of the board, we have a valid solution!
