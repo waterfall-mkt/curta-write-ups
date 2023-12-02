@@ -1,0 +1,238 @@
+---
+author: "0xd84365dAd6e6dB6fa2d431992acB1e050789bE69"
+contributors: ["0xd84365dAd6e6dB6fa2d431992acB1e050789bE69"]
+---
+
+First, to address the name of the puzzle, it is a play on words that is meant to sound similar to "water buckets". The water buckets puzzle is a classical logic puzzle around which I based this CTF puzzle. Here is what ChatGPT has to say:
+
+<Image
+  src="/images/what-are-buckets-chatgpt.png"
+  alt={`Screenshot of Walden messaging the question "What is the water bucket puzzle?" to ChatGPT, and ChatGPT explaining that it's a classic math problem that involves filling or transferring water between different-sized buckets to achieve a goal.`}
+  width={1440}
+  height={1180}
+/>
+
+What does this have to do with the Curta CTF? Well, let me explain.
+
+## Deciphering the code
+
+In the unobfuscated code, we have the following work function:
+
+```sol showLineNumbers={false}
+function work(uint256 state, uint8 op) internal pure returns (uint256) {
+    if (op >> 2 == 0) {
+        if ((op & 2) == 2) {
+            state <<= 8;
+        }
+        state &= 0xffffff00ff;
+        if ((op & 1) == 1) {
+            state |= (state >> 16) & 0xff00;
+        }
+        if ((op & 2) == 2) {
+            state >>= 8;
+        }
+    } else if ((op & 5) == 4) {
+        if ((op & 2) == 2) {
+            state = (state & 0xff00ff00) >> 8 | (state & 0x00ff00ff) << 8;
+        }
+        uint256 flow0 = (state >> 8) & 0xff;
+        uint256 flow1 = ((state >> 16) & 0xff) - (state & 0xff);
+        uint256 flow = flow0 > flow1 ? flow1 : flow0;
+        state -= flow << 8;
+        state += flow;
+        if ((op & 2) == 2) {
+            state = (state & 0xff00ff00) >> 8 | (state & 0x00ff00ff) << 8;
+        }
+    }
+    return state;
+}
+```
+
+To understand what this is doing, you should treat `state` as four concatenated bytes:
+
+```none showLineNumbers={false}
+capacity_1 | capacity_2 | volume_1 | volume_2
+```
+
+<Callout intent="neutral">
+  In other words, `state` encodes two water buckets of different capacities and
+  the current volume of water in each one.
+</Callout>
+
+Then, we can treat `op` as a three-bit command. Going through every value of `op`, we can figure out what each one does:
+
+- `op == 0`: This zeroes out bucket 1.
+- `op == 1`: This fills up bucket 1 to its full capacity.
+- `op == 2`: This zeroes out bucket 2.
+- `op == 3`: This fills up bucket 2 to its full capacity.
+
+Note that these first four opcodes are all implemented in the first `if` condition. The `state <<= 8` and `state >>= 8` in the code shifts the state to operate on bucket 2 instead of bucket 1 when the 2-bit is set.
+
+- `op == 4`: Following the code, we find that `flow0` gets set to `volume_1` and `flow1` gets set to `capacity_2 - volume_2`. `flow` is set to the lesser of these two values. Then, `flow` is removed from `volume_1` and added to `volume_2`. In other words, we took the water in bucket 1 and poured it into bucket 2 until we either ran out of water or hit bucket 2's capacity.
+- `op == 6`: The same thing happens but in the opposite direction, pouring from bucket 2 to bucket 1. This is implemented by swapping the volumes and capacities before and after the flow calculation: `state = (state & 0xff00ff00) >> 8 | (state & 0x00ff00ff) << 8`.
+- `op == 5` and `op == 7` do nothing!
+
+<Callout intent="neutral">
+  Essentially, the `work` function lets us take our two buckets and fill them
+  up, empty them, or pour water between them. This is exactly what we are
+  allowed to do in the classical logic puzzle.
+</Callout>
+
+The `workAll` function now wraps this `work` function to let you pass in a sequence of 85 commands to operate on an input state:
+
+```sol highlightLines={[3]} showLineNumbers={false}
+function workAll(uint256 state, uint256 commands) internal pure returns (uint256) {
+    for (uint256 i = 0; i < 85; i++) {
+        state = work(state, uint8(commands >> (i * 3)) & 7);
+    }
+
+    return state;
+}
+```
+
+### The task
+
+The `generate` function returns a starting configuration of buckets and volumes. You do not need to understand how the function works, though it can be fun to think about the best way to do this. You are then tasked with finding a sequence of commands that, when applied to this starting state, leaves you with 1 unit of water in the second bucket and nothing in the first bucket. There is also an extra condition of needing to mask your solution with the hash of your starting state just so it is a little harder for other people to steal your solution or notice patterns in the solutions.
+
+```sol showLineNumbers={false}
+function verify(uint256 _start, uint256 _solution) external pure returns (bool) {
+    return workAll(_start, _solution ^ uint256(keccak256(abi.encodePacked(_start)))) & 0xffff == 1;
+}
+```
+
+### Puzzle generation
+
+For those interested in how the `generate` function works, here are some of the key ideas. First, we use prime capacities. This makes it so that you can always achieve a capacity of 1. One important implication for later is that `generate` is designed to _always give buckets with prime capacity_. In generality, the smallest nonzero capacity that you can achieve is the greatest common factor of the two capacities.
+
+Moreover, there is some additional code to make sure the puzzle isn't solvable with only a handful of commands:
+
+```sol showLineNumbers={false}
+if (
+    (prime1 + 1) % prime2 == 0 ||
+    (prime2 + 1) % prime1 == 0 ||
+    (prime1 - 1) % prime2 == 0 ||
+    (prime2 - 1) % prime1 == 0
+) {
+    continue;
+}
+```
+
+<Callout>
+  The hardest puzzle you could have gotten would have been to start with buckets
+  of capacities 59 and 41.
+</Callout>
+
+## Solving the puzzle
+
+The puzzles were generated in a way such that you were unlikely to require less than a certain threshold of commands. Moreover, it is always possible to solve your puzzle in 85 commands or less. There were a few ways people approached the puzzle.
+
+### Method 1: Blackbox
+
+Treat `work` as a black box. The original code before first blood was obfuscated and hard to decipher. As a result, some early solvers never bothered to understand what `work` (called `foo` in the obfuscated code) did. However, if you were lucky, your solution didn't require using all 85 commands. The first solver, [sampriti.eth](https://etherscan.io/address/sampriti.eth), wrote a Python script that mimicked this functionality and performed a breadth-first search over sequences of commands until it reached the desired final state. Funnily enough, many competitors who did this used ChatGPT to convert from Solidity to Python.
+
+### Method 2: Play around with it
+
+Let us assume we had a simpler case. A bucket with capacity 3 and a bucket with capacity 5, both starting empty. How could we get exactly 1 unit of water? Well, for starters, we could get 2 units as follows:
+
+1. Fill up the capacity-5 bucket.
+2. Pour the capacity-5 bucket into the capacity-3 bucket.
+3. Dump the capacity-3 bucket
+
+What do we do now? Well turns out we can kind of repeat this:
+
+4. Pour the remaining 2 units of water into the capacity-3 bucket.
+5. Fill up the capacity-5 bucket.
+6. Pour from the capacity-5 bucket to the capacity-3 bucket, leaving 4 units left.
+7. Dump the capacity-3 bucket
+8. Pour from the capacity-5 bucket to the capacity-3 bucket, leaving 1 unit left.
+9. Dump the capacity-3 bucket
+
+You might notice here that we essentially keep filling up one bucket, pouring it into the other until the other one is full, and then dump the other bucket, repeating until we get the right amount. If were to try this for enough combinations of bucket capacities, you would notice you always get a winning strategy out of these sorts of repeated operations.
+
+<Callout>
+  If your numbers were small enough, you might have even been able to do this by
+  hand.
+</Callout>
+
+### Method 3: Math
+
+If your numbers were too large to find a solution by hand or if you just like thinking about these things mathematically, there is another solution for you. For simplicity, assume we start with two empty buckets (you can just empty both buckets at the start if not).
+
+<Callout intent="neutral">
+  **Key Idea 1**: There is only ever at most one bucket that is partially full.
+</Callout>
+
+A bucket will only be partially full when it contains what remains of an earlier pour into the other bucket that stopped early because the other bucket reached its capacity. Thus, we would find the other bucket to be full. The other bucket might also be empty if it was emptied afterward. But, the other bucket certainly cannot be partially full.
+
+<Callout intent="neutral">
+  **Key Idea 2**: You should never fill or empty the bucket that is partially
+  full.
+</Callout>
+
+As we saw from method 2, the partially full bucket represents all of your work up to this point. To empty that bucket or fill it up will cause your partial work to disappear.
+
+<Callout intent="neutral">
+  **Key Idea 3**: You will thus only ever fill an empty bucket or empty a full
+  bucket.
+</Callout>
+
+This comes directly from Key Idea 2.
+
+#### Building a mathematical model
+
+Let us simply consider $T$, the amount of water in the two buckets. We start with $T = 0$, and we want to get to $T = 1$. Once we get to $T = 1$, it is simple to transfer the water to the bucket we want. Let $p_{1}$ be the volume of bucket 1 and $p_{2}$ be the volume of bucket 2 (recall they are both prime). Moreover, let $X$ be the net number of times we fill bucket 1 (subtracting 1 if we empty bucket 1 while it is full), and similarly define $Y$ to be the net number of times we fill bucket 2. We then get the following equation:
+
+$$
+L = p_{1}X + p_{2}Y = 1
+$$
+
+<Callout intent="neutral">
+  It turns out this equation is of a well-known form called a [Diophantine
+  equation](https://en.wikipedia.org/wiki/Diophantine_equation).
+</Callout>
+
+We want to solve for $X$ and $Y$, the number of times we should fill/empty each bucket. It turns out that we can do this as follows. Rearrange the equation to get:
+
+$$
+p_{1}X = -p_{2}Y + 1
+$$
+
+This implies
+
+$$
+p_{1}X\equiv1\pmod{p_{2}}
+$$
+
+or
+
+$$
+X\equiv p_{1}^{-1}\pmod{p_{2}}
+$$
+
+It turns out that calculating inverses is particularly easy modulo primes. [Fermat's Little Theorem](https://en.wikipedia.org/wiki/Fermat%27s_little_theorem) tells us that $a^{p-1}\equiv1\pmod p$, which can be rearranged as $a^{p-2}\equiv a^{-1}\pmod p$. We can hence arrive at the following solution:
+
+$$
+X = p_{1}^{p_{2}-2}\pmod{p_{2}}
+$$
+
+In Python:
+
+```py showLineNumbers={false}
+X = p1 ** (p2 - 2) % p2
+```
+
+<Callout>
+  **Bonus**: There is also a way to find a solution using the [Euclidean
+  algorithm](https://en.wikipedia.org/wiki/Euclidean_algorithm).
+</Callout>
+
+#### Turning this into a solution
+
+Once we solve for $X$, we know the number of times we want to fill bucket 1. Now we just need to empty bucket 2 on an "as-needed" basis. One just needs to perform the following algorithm:
+
+1. Fill bucket 1.
+2. Pour from bucket 1 to bucket 2.
+3. If bucket 2 is full, empty bucket 2 and go back to step 2.
+4. Repeat from step 1 a total of $X$ times.
+
+You can generate this progammatically and encode it as a hex-string to [submit](/docs/puzzles/submitting-solutions).
