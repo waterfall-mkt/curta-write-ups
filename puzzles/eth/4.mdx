@@ -3,7 +3,7 @@ author: "0xd84365dAd6e6dB6fa2d431992acB1e050789bE69"
 contributors: ["0xd84365dAd6e6dB6fa2d431992acB1e050789bE69"]
 ---
 
-First, to address the name of the puzzle, it is a play on words that is meant to sound similar to “water buckets”. The water buckets puzzle is a classical logic puzzle around which I based this CTF puzzle. Here is what ChatGPT has to say:
+First, to address the name of the puzzle, it is a play on words that is meant to sound similar to "water buckets". The water buckets puzzle is a classical logic puzzle around which I based this CTF puzzle. Here is what ChatGPT has to say:
 
 <Image
   src="/images/what-are-buckets-chatgpt.png"
@@ -68,7 +68,7 @@ Then, we can treat `op` as a three-bit command. Going through every value of `op
 
 Note that these first four opcodes are all implemented in the first `if` condition. The `state <<= 8` and `state >>= 8` in the code shifts the state to operate on bucket 2 instead of bucket 1 when the 2-bit is set.
 
-- `op == 4`: Following the code, we find that `flow0` gets set to `volume_1` and `flow1` gets set to `capacity_2 - volume_2`. `flow` is set to the lesser of these two values. Then, `flow` is removed from `volume_1` and added to `volume_2`. In other words, we took the water in bucket 1 and poured it into bucket 2 until we either ran out of water or hit bucket 2’s capacity.
+- `op == 4`: Following the code, we find that `flow0` gets set to `volume_1` and `flow1` gets set to `capacity_2 - volume_2`. `flow` is set to the lesser of these two values. Then, `flow` is removed from `volume_1` and added to `volume_2`. In other words, we took the water in bucket 1 and poured it into bucket 2 until we either ran out of water or hit bucket 2's capacity.
 - `op == 6`: The same thing happens but in the opposite direction, pouring from bucket 2 to bucket 1. This is implemented by swapping the volumes and capacities before and after the flow calculation: `state = (state & 0xff00ff00) >> 8 | (state & 0x00ff00ff) << 8`.
 - `op == 5` and `op == 7` do nothing!
 
@@ -104,7 +104,7 @@ function verify(uint256 _start, uint256 _solution) external pure returns (bool) 
 
 For those interested in how the `generate` function works, here are some of the key ideas. First, we use prime capacities. This makes it so that you can always achieve a capacity of 1. One important implication for later is that `generate` is designed to _always give buckets with prime capacity_. In generality, the smallest nonzero capacity that you can achieve is the greatest common factor of the two capacities.
 
-Moreover, there is some additional code to make sure the puzzle isn’t solvable with only a handful of commands:
+Moreover, there is some additional code to make sure the puzzle isn't solvable with only a handful of commands:
 
 ```sol showLineNumbers={false}
 if (
@@ -128,7 +128,7 @@ The puzzles were generated in a way such that you were unlikely to require less 
 
 ### Method 1: Blackbox
 
-Treat `work` as a black box. The original code before first blood was obfuscated and hard to decipher. As a result, some early solvers never bothered to understand what `work` (called `foo` in the obfuscated code) did. However, if you were lucky, your solution didn’t require using all 85 commands. The first solver, [sampriti.eth](https://etherscan.io/address/sampriti.eth), wrote a Python script that mimicked this functionality and performed a breadth-first search over sequences of commands until it reached the desired final state. Funnily enough, many competitors who did this used ChatGPT to convert from Solidity to Python.
+Treat `work` as a black box. The original code before first blood was obfuscated and hard to decipher. As a result, some early solvers never bothered to understand what `work` (called `foo` in the obfuscated code) did. However, if you were lucky, your solution didn't require using all 85 commands. The first solver, [sampriti.eth](https://etherscan.io/address/sampriti.eth), wrote a Python script that mimicked this functionality and performed a breadth-first search over sequences of commands until it reached the desired final state. Funnily enough, many competitors who did this used ChatGPT to convert from Solidity to Python.
 
 ### Method 2: Play around with it
 
@@ -149,7 +149,7 @@ What do we do now? Well turns out we can kind of repeat this:
 
 You might notice here that we essentially keep filling up one bucket, pouring it into the other until the other one is full, and then dump the other bucket, repeating until we get the right amount. If were to try this for enough combinations of bucket capacities, you would notice you always get a winning strategy out of these sorts of repeated operations.
 
-<Callout intent="neutral">
+<Callout>
   If your numbers were small enough, you might have even been able to do this by
   hand.
 </Callout>
