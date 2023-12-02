@@ -54,7 +54,10 @@ To understand what this is doing, you should treat `state` as four concatenated 
 capacity_1 | capacity_2 | volume_1 | volume_2
 ```
 
-In other words, `state` encodes two water buckets of different capacities and the current volume of water in each one.
+<Callout intent="neutral">
+  In other words, `state` encodes two water buckets of different capacities and
+  the current volume of water in each one.
+</Callout>
 
 Then, we can treat `op` as a three-bit command. Going through every value of `op`, we can figure out what each one does:
 
@@ -114,7 +117,7 @@ if (
 }
 ```
 
-<Callout intent="neutral">
+<Callout>
   The hardest puzzle you could have gotten would have been to start with buckets
   of capacities 59 and 41.
 </Callout>
@@ -146,7 +149,10 @@ What do we do now? Well turns out we can kind of repeat this:
 
 You might notice here that we essentially keep filling up one bucket, pouring it into the other until the other one is full, and then dump the other bucket, repeating until we get the right amount. If were to try this for enough combinations of bucket capacities, you would notice you always get a winning strategy out of these sorts of repeated operations.
 
-If your numbers were small enough, you might have even been able to do this by hand.
+<Callout intent="neutral">
+  If your numbers were small enough, you might have even been able to do this by
+  hand.
+</Callout>
 
 ### Method 3: Math
 
