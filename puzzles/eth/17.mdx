@@ -1,0 +1,124 @@
+---
+author: '0xB578405Df1F9D4dFdD46a0BD152D518d4c5Fe0aC'
+contributors:
+  ['0xB578405Df1F9D4dFdD46a0BD152D518d4c5Fe0aC', '0xA85572Cd96f1643458f17340b6f0D6549Af482F5']
+adapted_from: 'https://github.com/hrkrshnn/notes/blob/1e1723cb089f16ae4faf1ab7da266be585d248b2/2023/curta.md'
+---
+
+The history has been unkind to its brightest minds: Galois, Galileo, Archimedes, and others met tragic fates. Join me in unraveling a mysterious murder from two millenia ago!
+
+<Image
+  src="/images/death-of-archimedes.png"
+  alt={`An oil painting by the French artist Thomas Degeorge in 1815 titled "La Mort d'Archimède", which depicts a Roman soldier about to murder Archimedes with a sword.`}
+  width={1200}
+  height={1084}
+/>
+
+## History of EVM precompiles
+
+Pre-compiles in Ethereum are fascinating. There is a rich history behind introducing each of them, a history that is full of drama. Even though we [already have 9 today](https://www.evm.codes/?fork=shanghai), people can't wait to get more precompiles in the EVM. They are also a hot mess for security. They also share some quirks that we'll explore soon.
+
+A long time ago, one of the most requested feature in Solidity was to skip the `extcodesize` check that Solidity performs for every high-level call. Such a check is important, because the EVM assumes that calls to empty addresses are successful by default (whether or not this is a quirk is up for debate, but that is another conversation).
+
+This long-requested feature in Solidity was meant to save gas (800 gas back then, before [EIP-2929](https://eips.ethereum.org/EIPS/eip-2929)), as in many cases, the contract addresses were known in advance to have code. There were varying proposals from just dropping into assembly to introducing new syntaxes to skip these checks. Solidity settled for a solution that was in-between: the check was skipped if the function had return values! See: [#12205](https://github.com/ethereum/solidity/pull/12205).
+
+<Callout intent="neutral">
+  This works because if a function returns data, Solidity checks if the `returndatasize` (a cheap
+  instruction) is at least as big as the data necessary for the returned variable, before proceeding
+  to decode the return variables. If the `returndatasize` is less than what it's supposed to be, the
+  function immediately reverts. This was the case before and after the previously mentioned
+  [#12205](https://github.com/ethereum/solidity/pull/12205).
+</Callout>
+
+Thus, you can skip the `extcodesize` check since the `returndatasize` check will revert anyway for empty accounts. But is that really true? Unfortunately, a common theme throughout the EVM is that there is an exception for every rule. In this case, there are accounts that have empty `extcodesize` values but can still return data. These are precompiles! So, technically, [#12205](https://github.com/ethereum/solidity/pull/12205) was a subtle breaking change in Solidity, but we concluded that it was such an exceptional case that it was okay: precompiles don't follow the ABI standard, and therefore calling them using a high-level call was idiosyncratic.
+
+<Callout>
+  If you want to see the breaking change in action, you can see how the output of the test in
+  [#12219](https://github.com/ethereum/solidity/pull/12219/files) changed in
+  [#12205](https://github.com/ethereum/solidity/pull/12205/files#diff-99e5627b1eba2ab69b09bafbc9d5001b7d7f899cf6d136477441715159b129c2).
+  This changed landed in Solidity version `0.8.10`.
+</Callout>
+
+## The identity precompile and magic checks
+
+A peculiar precompile is
+[`address(0x04)`](https://github.com/ethereum/go-ethereum/blob/5fb8ebc9ecb226b84181420b9871c5f61cf4f77d/core/vm/contracts.go#L87C14-L87C14). This is the **identity precompile**, which returns back all the data that's sent to it.
+
+<Callout>
+  This was originally designed for copying from memory (poor man's `memcpy`), and `solc` at some
+  point was using this for internal routines. However, various repricings in the EVM led to this
+  copy routine being unreliable, and it was subsequently removed in later versions of the compiler.
+</Callout>
+
+There are several EIPs that enforce certain magic bytes to be returned for a successful call. These "magic bytes" are typically the selector of the function in question. However, the identity precompile, combined with such standards, create a very peculiar scenario where the magic checks can be made to succeed!
+
+Consider the following interface `IMagicReturn`, which expects a magic 4-byte value to be returned in case of a success:
+
+```sol showLineNumbers={false}
+interface IMagicReturn {
+    /// MUST return magic `foo.selector` in the valid case
+    function foo() external returns (bytes4);
+}
+
+/// Function that enforces the magic check
+function magicCheck(IMagicReturn magicReturn) {
+    require(magicReturn.foo() == IMagicReturn.foo.selector);
+}
+```
+
+Since ABI encoding an external call first starts with the selector, the first 4 bytes returned by identity precompile returns selector, which is the correct 4-byte value. However, this still isn't enough to follow the spec, as Solidity expects at least 32 bytes to be returned in the above case. Thus, since `MagicReturn(address(0x04)).foo()` only returns 4 bytes, the high-level call will revert.
+
+This can be easily be circumvented by adding extra parameters to the function:
+
+```diff showLineNumbers={false}
+interface MagicReturnWithExtraData {
+    /// MUST return magic `foo.selector` in the valid case
++   function foo(uint x) external returns (bytes4);
+}
+
+/// Function that enforces the magic check
+function magicCheck(IMagicReturn magicReturn) {
++   require(magicReturn.foo(type(uint).max) == IMagicReturn.foo.selector);
+}
+```
+
+In the above case, `MagicReturnWithExtraData(address(0x4)).foo(type(uint).max)` returns 36 bytes of data. However, if you test this out, the call to `magicCheck` will still revert!
+
+Solidity adds too many safety checks for its own good. Just when you think you can get around a check, another check will save the day. In the above case, there's an additional check that happens when decoding the `bytes4` return type, and it checks if the remaining data in the word is `0`. In the above case, the `type(uint).max` leaks into the same word and fails this check!
+
+<Callout intent="neutral">
+  However, this check is only done by the ABI Encoder V2, and not V1. This is a key insight that
+  gets used in the CTF, and this explains the curious `pragma abicoder v1`; in the CTF.
+</Callout>
+
+### Using other precompiles
+
+Now that we know how to use `address(0x04)` to satisfy the magic checks, let's explore the idea of using other precompiles to satisfy such magic checks.
+
+If you look carefully through the [other precompiled contracts](https://evm.codes/precompiled), you can see that `sha256` (`address(0x02)`) can also be made to satisfy the magic check by mining for inputs with a 4-byte match with the hash function's return value. Similarly, the other hash precompile `ripemd-160` (`address(0x03)`) can also be made to satisfy the magic check, but it requires a bit more mining. `ripemd-160` returns a zero-padded value where the first 12 bytes are `0`, so to pass the magic check, we also have to mine for a function selector equal to `0`.
+
+## Pythagoras's murder of Hippasus
+
+I wanted to dedicate the puzzle towards the legend of Hippasus's murder by Pythagoras. I asked ChatGPT to write a theatrical version of this story and prompted it to remove details until it wasn't immediately obvious what the story was about. I confirmed this by copying over the story in a different context and asking it questions about the story, especially around the killer and the victim, and it wasn't able to trace back to the original story. My goal was to hide clues throughout the Solidity source code that could either be used to prompt ChatGPT or casually search around historical references.
+
+The hidden clue is the formula:
+
+$$
+3^{2} + 4^{2} = 5^{2},
+$$
+
+which is a Pythagorean triplet that satisfies the final math equation. Several people were really close to Pythagoras early on, but they never considered the idea that he could have been the killer! Great PR by the Pythagoreans.
+
+`pragma abicoder v1` is also another hidden clue that indicates that there is something fishy about the return data decoding: it indicates that the addresses you are supposed to deploy need not be a regular address, and it hints at utilizing precompiles.
+
+To summarize, the puzzle required multiple things to work at the same time:
+
+1. `pragma abicoder v1`.
+2. At least a Solidity version of `0.8.10`.
+
+<Image
+  src="/images/murder-of-hippasus-by-the-pythagoreans.png"
+  alt="A Midjourney generation depicting the murder of Hippasus by the Pythagoreans in an style similar to an oil painting."
+  width={1024}
+  height={1024}
+/>
