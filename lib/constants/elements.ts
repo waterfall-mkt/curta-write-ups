@@ -1,5 +1,4 @@
 export const CUSTOM_ELEMENTS = new Set([
-  'AddressLinkClient',
   'Callout',
   'ComponentsDisplay',
   'CredentialFeature',
@@ -7,7 +6,6 @@ export const CUSTOM_ELEMENTS = new Set([
   'Image',
   'LinkFeature',
   'LogoIcon',
-  'UserHoverCard',
 ]);
 
 export const HTML_ELEMENTS = new Set([
