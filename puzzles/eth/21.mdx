@@ -13,7 +13,7 @@ This challenge is based on an observation: by using single-use addresses, you ca
   on having challengers construct transactions that could be verified by the `TxHashSimulator`.
 </Callout>
 
-## Solve script
+## Solving the puzzle
 
 By modifying the code from the challenge files, we can write a Foundry script which constructs the raw transaction, derives the sender, and tells us how much ETH to fund the sender with before broadcasting the raw transaction:
 
@@ -84,4 +84,4 @@ function solve(address solver, Submerged submerged) public view {
 }
 ```
 
-After this, it's as simple as calling the `proveSubmergedSeed` function and passing in the raw transaction bytes.
+After this, it's as simple as calling the `proveSubmergedSeed` method and passing in the raw transaction bytes.
