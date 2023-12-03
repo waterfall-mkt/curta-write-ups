@@ -69,8 +69,8 @@ contract UncertaintyPrinciple is IPuzzle {
 
 <Callout intent="neutral">
   Essentially, the objective of the puzzle is to compute `_solution` such that repeatedly
-  subtracting a portion of `keccak256(_solution, gasleft())` at each iteration of the loop will
-  eventually result in `_start`'s last 32 bits being 0.
+  subtracting a portion of `keccak256(_solution, gasleft())` from `_start` at each iteration of the
+  loop will eventually result in `_start`'s last 32 bits being 0.
 </Callout>
 
 This poses an interesting set of challenges:
