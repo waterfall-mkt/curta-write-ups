@@ -107,11 +107,11 @@ Theoretically, knowing this, since the EVM is deterministic, we can _try_ to fol
 One thing experimental physicists know is that their experiments don't represent the real world, but a controlled representation of the real world. In a similar vein, modifying the contract to log `gasleft()` at each iteration can reveal a lot about how the contract actually behaves.
 
 ```diff showLineNumbers={false}
-- function _gammaFn(uint256 _xyz) internal view returns (uint256) {
--     uint256 _gasLeft = gasleft();
-+     console.log(_gasLeft);
--     return uint256(keccak256(abi.encodePacked(_xyz, _gasLeft)));
-- }
+function _gammaFn(uint256 _xyz) internal view returns (uint256) {
+     uint256 _gasLeft = gasleft();
++    console.log(_gasLeft);
+     return uint256(keccak256(abi.encodePacked(_xyz, _gasLeft)));
+}
 ```
 
 This way, the puzzle becomes easier to solve because the gas left is now logged, and we can solve iteratively, backwards from each logged value. After building up intuition for solving the puzzle with the `console.log` line added in, we can remove it and solve the puzzle without it by reading from the stack directly.
