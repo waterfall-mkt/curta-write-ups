@@ -3,3 +3,25 @@ author: '0xB49bf876BE26435b6fae1Ef42C3c82c5867Fa149'
 contributors: ['0xB49bf876BE26435b6fae1Ef42C3c82c5867Fa149']
 adapted_from: 'https://github.com/chainlight-io/publications/blob/417d1475d3b7057db6e0da2cbaba6104576f3d20/ctf-writeups/curta-cup/LatentRisk/writeup.md'
 ---
+
+## Overview
+
+Numerous projects have suffered exploits due to the round-down vulnerability present in the very early stages of Web 3. This challenge was inspired by an incident that happened in the Compound v2 fork, and it was crafted to inform about potential threats that exist in Compound v2.
+
+<Callout>
+  Please note that Compound v2 has known about this for a long time, and they've never encountered
+  any problems due to this.
+</Callout>
+
+I hope every builder/developer/security researcher acknowledges this latent risk and does not reproduce the same crisis anymore.
+
+## Solving the puzzle
+
+Compound v2 utilizes interest-bearing tokens (ibTokens) named `cToken` to manage lender and borrower positions, which can be managed by `comptroller`, the controller in Compound v2. However, if you accept `cToken` as collateral before any issuance of `cToken`, you can exploit a round-down vulnerability to drain all other underlying assets of `cToken`.
+
+The root cause is that the exchange rate of `cToken` can be manipulated at the attacker's will when no liquidity exists, and a round-down occurs in `redeemUnderlying()`. As a result, an attacker can borrow other underlying assets of `cToken` without collateral.
+
+<Callout>
+  If you are interested in learning more, check out [our blog
+  post](https://medium.com/chainlight/patch-thursday-security-risks-due-to-exchange-rate-manipulation-of-ibtoken-ebf8e8cb165a).
+</Callout>
