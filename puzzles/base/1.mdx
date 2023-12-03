@@ -23,6 +23,8 @@ The challenger needs to get the DAO to call two methods: `forgeThrone` and `addU
 4. Create a new proposal with `id = x` with any payload data, but with description equal to the new payload data: `abi.encodeWithSelector(Throne.addUsurper.selector, solver)`. This will recreate the payload contract for proposal `keccak(x, x)`, but with no validation checks.
 5. Vote for and execute proposal ID `keccak256(x, x)`.
 
+### Solve script
+
 Check out our solve script below for more details.
 
 ```sol fileName="Solve.s.sol"

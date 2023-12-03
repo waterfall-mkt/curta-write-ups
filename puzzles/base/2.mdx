@@ -3,3 +3,113 @@ author: '0xB49bf876BE26435b6fae1Ef42C3c82c5867Fa149'
 contributors: ['0xB49bf876BE26435b6fae1Ef42C3c82c5867Fa149']
 adapted_from: 'https://github.com/chainlight-io/publications/blob/417d1475d3b7057db6e0da2cbaba6104576f3d20/ctf-writeups/curta-cup/AddressGame/writeup.md'
 ---
+
+## Overview
+
+<Callout>
+  This challenge was inspired by [The Password Game](https://neal.fun/password-game/).
+</Callout>
+
+For this challenge, you need to generate a vanity contract address that satisfies:
+
+- The address contains `box(seed, 0) % 2` vowel hexadecimal digits (`0xA` and `0xE`).
+- The address contains `box(seed, 1) % 3` consonant hexadecimal digits (`0xB`, `0xC`, `0xD`, and `0xF`).
+- All number digits in the address (`[0x0, 0x9]`) sum to `25 + seed % 50`.
+
+## Solving the puzzle
+
+To generate the vanity address, you can write your own miner that satisfies the conditions above.
+
+For example, we made the following changes to [profanity2](https://github.com/1inch/profanity2):
+
+```diff fileName="profanity2.patch"
+diff --git a/profanity.cl b/profanity.cl
+index fe187fd..ddd865c 100644
+--- a/profanity.cl
++++ b/profanity.cl
+@@ -768,18 +768,35 @@ __kernel void profanity_score_range(__global mp_number * const pInverse, __globa
+        __global const uchar * const hash = pInverse[id].d;
+        int score = 0;
+
++    int c[16];
++    for (int i = 0; i < 16; i++) {
++        c[i] = 0;
++    }
++
++    score = 40;
++
+        for (int i = 0; i < 20; ++i) {
+                const uchar first = (hash[i] & 0xF0) >> 4;
+                const uchar second = (hash[i] & 0x0F);
++        c[first]++;
++        c[second]++;
++       }
+
+-               if (first >= data1[0] && first <= data2[0]) {
+-                       ++score;
++    {
++        if (((c[0xa] + c[0xe]) & 1) != 0) score = 0;
++        if (((c[0xb] + c[0xc] + c[0xd] + c[0xf]) % 3) != 0) score = 0;
+     }
+
+-               if (second >= data1[0] && second <= data2[0]) {
+-                       ++score;
++    {
++        int _sum = 0;
++        for (int i = 1; i < 10; i++) {
++            _sum += c[i] * i;
+         }
++        if (_sum != 25 + 35) {
++            score = 0;
+         }
++    }
++
+```
+
+<Callout>
+  While `box` returns `uint256`, you can mine for `uint64` instead since the modulo fits within 64 bits: $\log_{2}15203777108537674021<64$.
+</Callout>
+
+### Solve script
+
+Check out our solve test below for more details.
+
+<Callout>
+  The solution below is for [our
+  address](https://etherscan.io/address/0xB49bf876BE26435b6fae1Ef42C3c82c5867Fa149).
+</Callout>
+
+```sol fileName="Solve.t.sol"
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.13;
+
+import {Test, console2} from "forge-std/Test.sol";
+import {IBox, AddressGame} from "../src/Challenge.sol";
+
+contract MyBox is IBox {
+    function isSolved() external view returns (bool) {
+        return true;
+    }
+}
+
+contract ChallengeTest is Test {
+    AddressGame public challenge;
+
+    function setUp() public {
+        challenge = new AddressGame();
+    }
+
+    function test_Solve() public {
+        // Solution: see profanity2.patch and https://github.com/1inch/profanity2
+        address ATTACKER = 0xB49bf876BE26435b6fae1Ef42C3c82c5867Fa149;
+        address DEPLOYER = vm.createWallet(0x000039ecc4b345efae348b37e89fef3678e6ed97715a2a3b053be81f528bdad2).addr;
+
+        uint256 seed = challenge.generate(ATTACKER);
+        console2.log(seed, challenge.box(seed, 0) % 2, challenge.box(seed, 1) % 3);
+
+        vm.startPrank(DEPLOYER);
+        uint256 solution = uint256(uint160(address(new MyBox())));
+        assertEq(challenge.verify(seed, solution), true);
+    }
+}
+```
