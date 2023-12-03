@@ -1,4 +1,5 @@
 export const CUSTOM_ELEMENTS = new Set([
+  'AddressLinkClient',
   'Callout',
   'ComponentsDisplay',
   'CredentialFeature',
