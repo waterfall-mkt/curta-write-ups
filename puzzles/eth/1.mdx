@@ -1,6 +1,6 @@
 ---
-author: "0xA85572Cd96f1643458f17340b6f0D6549Af482F5"
-contributors: ["0xA85572Cd96f1643458f17340b6f0D6549Af482F5"]
+author: '0xA85572Cd96f1643458f17340b6f0D6549Af482F5'
+contributors: ['0xA85572Cd96f1643458f17340b6f0D6549Af482F5']
 ---
 
 ## Overview
@@ -94,10 +94,9 @@ function check(uint256 _shifted, uint256 _shifts) internal pure returns (bool) {
 ```
 
 <Callout intent="neutral">
-  `check` uses the same technique used in `generate`, except it can check the
-  existence of $[1, 8]$ in _any_ set of 8 indices by taking in a series of
-  shifts to apply after each iteration, rather than just shifting by 4 bits
-  every time.
+  `check` uses the same technique used in `generate`, except it can check the existence of $[1, 8]$
+  in _any_ set of 8 indices by taking in a series of shifts to apply after each iteration, rather
+  than just shifting by 4 bits every time.
 </Callout>
 
 This is very helpful because Sudoku is quite repetitive: for each row, column, and subgrid, we perform the same check. With the way the helper function is set up, we can do that easily by defining the index shifts to look at for a row, column, or subgrid.
@@ -107,36 +106,36 @@ For example, for a subgrid, we'd want to shift by 4 bits, then 4, 20, 4, 4, 4, a
 <ComponentsDisplay>
   <div
     style={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      gap: "0.5rem",
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '0.5rem',
     }}
   >
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(8, 1fr)",
-        border: "1px solid #27303d",
-        backgroundColor: "#12161f",
-        borderRadius: "0.75rem",
-        overflow: "hidden",
-        color: "#c1cdd9",
+        display: 'grid',
+        gridTemplateColumns: 'repeat(8, 1fr)',
+        border: '1px solid #27303d',
+        backgroundColor: '#12161f',
+        borderRadius: '0.75rem',
+        overflow: 'hidden',
+        color: '#c1cdd9',
       }}
     >
       {new Array(64).fill(null).map((_, i) => (
         <div
           key={i}
           style={{
-            fontSize: "0.75rem",
-            fontFamily: "Menlo, monospace",
-            width: "2rem",
-            height: "2rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: (i & 7) > 3 && i > 48 ? "#092e52" : "transparent",
-            color: (i & 7) > 3 && i > 48 ? "#7697ee" : "#c1cdd9",
+            fontSize: '0.75rem',
+            fontFamily: 'Menlo, monospace',
+            width: '2rem',
+            height: '2rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: (i & 7) > 3 && i > 48 ? '#092e52' : 'transparent',
+            color: (i & 7) > 3 && i > 48 ? '#7697ee' : '#c1cdd9',
           }}
         >
           {252 - i * 4}
@@ -144,7 +143,7 @@ For example, for a subgrid, we'd want to shift by 4 bits, then 4, 20, 4, 4, 4, a
       ))}
     </div>
     <div
-      style={{ fontSize: "0.875rem", color: "#758195" }}
+      style={{ fontSize: '0.875rem', color: '#758195' }}
       children="Numbers represent LSb positions"
     />
   </div>

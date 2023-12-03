@@ -1,6 +1,6 @@
 ---
-author: "0xd84365dAd6e6dB6fa2d431992acB1e050789bE69"
-contributors: ["0xd84365dAd6e6dB6fa2d431992acB1e050789bE69"]
+author: '0xd84365dAd6e6dB6fa2d431992acB1e050789bE69'
+contributors: ['0xd84365dAd6e6dB6fa2d431992acB1e050789bE69']
 ---
 
 First, to address the name of the puzzle, it is a play on words that is meant to sound similar to "water buckets". The water buckets puzzle is a classical logic puzzle around which I based this CTF puzzle. Here is what ChatGPT has to say:
@@ -55,8 +55,8 @@ capacity_1 | capacity_2 | volume_1 | volume_2
 ```
 
 <Callout intent="neutral">
-  In other words, `state` encodes two water buckets of different capacities and
-  the current volume of water in each one.
+  In other words, `state` encodes two water buckets of different capacities and the current volume
+  of water in each one.
 </Callout>
 
 Then, we can treat `op` as a three-bit command. Going through every value of `op`, we can figure out what each one does:
@@ -73,9 +73,8 @@ Note that these first four opcodes are all implemented in the first `if` conditi
 - `op == 5` and `op == 7` do nothing!
 
 <Callout intent="neutral">
-  Essentially, the `work` function lets us take our two buckets and fill them
-  up, empty them, or pour water between them. This is exactly what we are
-  allowed to do in the classical logic puzzle.
+  Essentially, the `work` function lets us take our two buckets and fill them up, empty them, or
+  pour water between them. This is exactly what we are allowed to do in the classical logic puzzle.
 </Callout>
 
 The `workAll` function now wraps this `work` function to let you pass in a sequence of 85 commands to operate on an input state:
@@ -118,8 +117,8 @@ if (
 ```
 
 <Callout>
-  The hardest puzzle you could have gotten would have been to start with buckets
-  of capacities 59 and 41.
+  The hardest puzzle you could have gotten would have been to start with buckets of capacities 59
+  and 41.
 </Callout>
 
 ## Solving the puzzle
@@ -150,8 +149,7 @@ What do we do now? Well turns out we can kind of repeat this:
 You might notice here that we essentially keep filling up one bucket, pouring it into the other until the other one is full, and then dump the other bucket, repeating until we get the right amount. If were to try this for enough combinations of bucket capacities, you would notice you always get a winning strategy out of these sorts of repeated operations.
 
 <Callout>
-  If your numbers were small enough, you might have even been able to do this by
-  hand.
+  If your numbers were small enough, you might have even been able to do this by hand.
 </Callout>
 
 ### Method 3: Math
@@ -165,15 +163,13 @@ If your numbers were too large to find a solution by hand or if you just like th
 A bucket will only be partially full when it contains what remains of an earlier pour into the other bucket that stopped early because the other bucket reached its capacity. Thus, we would find the other bucket to be full. The other bucket might also be empty if it was emptied afterward. But, the other bucket certainly cannot be partially full.
 
 <Callout intent="neutral">
-  **Key Idea 2**: You should never fill or empty the bucket that is partially
-  full.
+  **Key Idea 2**: You should never fill or empty the bucket that is partially full.
 </Callout>
 
 As we saw from method 2, the partially full bucket represents all of your work up to this point. To empty that bucket or fill it up will cause your partial work to disappear.
 
 <Callout intent="neutral">
-  **Key Idea 3**: You will thus only ever fill an empty bucket or empty a full
-  bucket.
+  **Key Idea 3**: You will thus only ever fill an empty bucket or empty a full bucket.
 </Callout>
 
 This comes directly from Key Idea 2.

@@ -1,0 +1,51 @@
+---
+author: '0xB958d9FA0417E116F446D0A06D0326805Ad73Bd5'
+contributors: ['0xB958d9FA0417E116F446D0A06D0326805Ad73Bd5']
+adapted_from: 'https://twitter.com/rileyholterhus/status/1637905710095933441'
+---
+
+## secp256k1 lore
+
+Although the challenge is only a few lines of code, solving it involves traveling back ~25 years to when the parameters of the [secp256k1 curve](https://en.bitcoin.it/wiki/Secp256k1) were chosen.
+
+<Image
+  src="/images/doge-secp256k1.png"
+  alt={`Screenshot of Walden messaging the question "What is the water bucket puzzle?" to ChatGPT, and ChatGPT explaining that it's a classic math problem that involves filling or transferring water between different-sized buckets to achieve a goal.`}
+  width={453}
+  height={467}
+/>
+
+Before we even get to the puzzle, we can take a closer look at the [specification of secp256k1](https://www.secg.org/SEC2-Ver-1.0.pdf) (the curve used by Bitcoin/Ethereum). This was released by Certicom in 2000, but unfortunately, the parameter selection process wasn't super descriptive:
+
+> Parameters associated with a Koblitz curve admit especially efficient implementation. The name Koblitz curve is best-known when used to describe binary anomalous curves over $\mathbb{F}_{2^m}$ which have $a,b\in\{0,1\}$, [9]. Here it is generalized to refer also to curves over $\mathbb{F}_p$ which possess an efficiently computable endomorphism [7]. <span style={{ backgroundColor: "", color: "" }} children="The recommended parameters associated with a Koblitz curve were chosen by repeatedly selecting parameters admitting an efficiently computable endomorphism until a prime order curve was found." />
+
+For discussion about this, we can look at [this Bitcoin Talk discussion](https://bitcointalk.org/index.php?topic=289795.0). Despite the limited documentation, people were able to reverse engineer reasonable explanations for the parameter chioces, including:
+
+- $p$ being chosen as a [generalized Mersenne prime](https://en.wikipedia.org/wiki/Solinas_prime) ([helps with computing modular reductions](https://en.wikipedia.org/wiki/Solinas_prime#Modular_reduction_algorithm)).
+- The coefficients ($a$ and $b$) of the curve equation being the smallest values you can choose that result in a prime order (the chosen $a$ and $b$ also allow for the [GLV method optimization](https://link.springer.com/chapter/10.1007/3-540-44647-8_11), which is even more possible explanation).
+
+But despite all this reverse engineering, there was/is no good explanation for how the generator point $G$ was selected. Because of how the other parameters were chosen, pretty much _any_ point on the curve could have been used as $G$, so why not something "normal looking"? Well, there still isn't a great answer for this. In fact, even more questions arose when Gregory Maxwell discovered the point $G/2$ has an anomalously small $x$-coordinate, as he describes [here](https://crypto.stackexchange.com/questions/60420/what-does-the-special-form-of-the-base-point-of-secp256k1-allow/76010#76010).
+
+This `x`-coordinate is basically the same in $G/2$ for _every_ secp\_\_\_k1 curve, which implies there was a common initial $x$-coordinate point that was slightly altered and then doubled to get $G$ for each curve. The value is ~160 bits, which means it could be a SHA1 output:
+
+<ComponentsDisplay>
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
+    <code style={{ color: '#758195', fontSize: '0.875rem' }}>
+      <span children="0x0000000000000000000000004" />
+      <span children="8ce563f89a0ed9414f5aa28ad0d96d6795f9c6" style={{ color: '#c1cdd9' }} />
+      <span children="2" />
+    </code>
+    <code style={{ color: '#758195', fontSize: '0.875rem' }}>
+      <span children="0x00000000000000000554123b7" />
+      <span children="8ce563f89a0ed9414f5aa28ad0d96d6795f9c6" style={{ color: '#c1cdd9' }} />
+      <span children="6" />
+    </code>
+    <code style={{ color: '#758195', fontSize: '0.875rem' }}>
+      <span children="0x00000000000000000000003b7" />
+      <span children="8ce563f89a0ed9414f5aa28ad0d96d6795f9c6" style={{ color: '#c1cdd9' }} />
+      <span children="3" />
+    </code>
+  </div>
+</ComponentsDisplay>
+
+This only adds to the mystery, since the "doubling" was never documented, doesn't seem necessary, and we don't know this SHA1 preimage. Regardless, the actual choice of $G$ doesn't affect the security of the curve in any way, but it does allow a very interesting "trick" in ECDSA.
