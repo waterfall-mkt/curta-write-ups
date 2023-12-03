@@ -25,6 +25,7 @@
   "dependencies": {
     "@mdx-js/react": "^3.0.0",
     "@types/react": "^18.2.41",
+    "glob": "^10.3.10",
     "next-mdx-remote": "^4.4.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
