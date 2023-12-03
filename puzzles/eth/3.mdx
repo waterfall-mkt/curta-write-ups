@@ -129,7 +129,7 @@ $$
 s=k^{-1}(h+rd)\pmod n\iff h=ks-rd\pmod n
 $$
 
-To actually submit the solution, the easiest method to return `h`, `v` and `r` in only 32 bytes of EVM code is to forward the call to another contract that has these values hardcoded. This is what <UserHoverCard address="0xB958d9FA0417E116F446D0A06D0326805Ad73Bd5" trigger={<AddressLinkClient address="0xB958d9FA0417E116F446D0A06D0326805Ad73Bd5" />} triggerProps={{ asChild: true }} /> and [@eth_call](https://twitter.com/eth_call) deployed at [`0x000000000045e5418329ee1f6d07dc6e73ad0ab0`](https://etherscan.io/address/0x000000000045e5418329ee1f6d07dc6e73ad0ab0).
+To actually submit the solution, the easiest method to return `h`, `v` and `r` in only 32 bytes of EVM code is to forward the call to another contract that has these values hardcoded. This is what <UserHoverCard address="0xB958d9FA0417E116F446D0A06D0326805Ad73Bd5" trigger={<AddressLinkClient address="0xB958d9FA0417E116F446D0A06D0326805Ad73Bd5" />} triggerAsChild /> and [@eth_call](https://twitter.com/eth_call) deployed at [`0x000000000045e5418329ee1f6d07dc6e73ad0ab0`](https://etherscan.io/address/0x000000000045e5418329ee1f6d07dc6e73ad0ab0).
 
 ```sol fileName="Tinysolve.sol"
 // SPDX-License-Identifier: Unlicense
