@@ -4,7 +4,7 @@ contributors: ['0xB958d9FA0417E116F446D0A06D0326805Ad73Bd5']
 adapted_from: 'https://twitter.com/rileyholterhus/status/1637905710095933441'
 ---
 
-## Context: secp256k1 lore
+## Prologue
 
 Although the challenge is only a few lines of code, solving it involves traveling back ~25 years to when the parameters of the [secp256k1 curve](https://en.bitcoin.it/wiki/Secp256k1) were chosen.
 
@@ -19,7 +19,7 @@ Before we even get to the puzzle, we can take a closer look at the [specificatio
 
 > Parameters associated with a Koblitz curve admit especially efficient implementation. The name Koblitz curve is best-known when used to describe binary anomalous curves over $\mathbb{F}_{2^m}$ which have $a,b\in\{0,1\}$, [9]. Here it is generalized to refer also to curves over $\mathbb{F}_p$ which possess an efficiently computable endomorphism [7]. <span style={{ backgroundColor: "#092e52", color: "#7697ee" }} children="The recommended parameters associated with a Koblitz curve were chosen by repeatedly selecting parameters admitting an efficiently computable endomorphism until a prime order curve was found." />
 
-For discussion about this, we can look at [this Bitcoin Talk discussion](https://bitcointalk.org/index.php?topic=289795.0). Despite the limited documentation, people were able to reverse engineer reasonable explanations for the parameter chioces, including:
+For discussion about this, we can look at [this Bitcoin Talk discussion](https://bitcointalk.org/index.php?topic=289795.0). Despite the limited documentation, people were able to reverse engineer reasonable explanations for the parameter choices, including:
 
 - $p$ being chosen as a [generalized Mersenne prime](https://en.wikipedia.org/wiki/Solinas_prime) (helps with computing modular reductions).
 - The coefficients ($a$ and $b$) of the curve equation being the smallest values you can choose that result in a prime order (the chosen $a$ and $b$ also allow for the [GLV method optimization](https://link.springer.com/chapter/10.1007/3-540-44647-8_11), which is even more possible explanation).
@@ -76,7 +76,7 @@ As you may know, the first step in [ECDSA](https://en.wikipedia.org/wiki/Ellipti
 But with a toy private key, the property of $G$ we just discussed tells us that setting $k=1/2\pmod n$ will make the $r$ value equal the $x$-coordinate of $G/2$, which has an impossibly large number of zeroes—far more zeroes than you would get with any brute-force method.
 
 <Callout>
-  This trick [was used](https://bitcointalk.org/index.php?topic=1118704) all the way back in 2015,
+  This trick [was used all the way back in 2015](https://bitcointalk.org/index.php?topic=1118704),
   when Bitcoin users leveraged this property to save bytes on ransactions that swept dust from
   accounts with known private keys.
 </Callout>
@@ -85,7 +85,10 @@ But with a toy private key, the property of $G$ we just discussed tells us that 
 
 At this point, we can finally take a look at the CTF. As you can see, users submit bytecode that returns a valid msg hash + signature for a given private key. The challenge hardcodes a different `s` value for everyone, and requires that the `r` value has 9 leading zero bytes.
 
-```sol fileName="Puzzle.sol" highlight={[24]} showLineNumbers={false}
+```sol fileName="Puzzle.sol" highlightLines={[27]}
+// SPDX-License-Identifier: Unlicense
+pragma solidity ^0.8.17;
+
 contract TinySig is IPuzzle {
     // This is the address you get by using the private key `0x1`. For this
     // challenge, make sure you do not use *your own* private key (other than to
@@ -128,7 +131,7 @@ $$
 
 To actually submit the solution, the easiest method to return `h`, `v` and `r` in only 32 bytes of EVM code is to forward the call to another contract that has these values hardcoded. This is what [\@0xkarmacoma](https://twitter.com/0xkarmacoma) and [@eth_call](https://twitter.com/eth_call) deployed at [`0x000000000045e5418329ee1f6d07dc6e73ad0ab0`](https://etherscan.io/address/0x000000000045e5418329ee1f6d07dc6e73ad0ab0).
 
-```sol fileName="Tinysolve.sol" showLineNumbers={false}
+```sol fileName="Tinysolve.sol"
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.17;
 
@@ -148,3 +151,7 @@ contract Tinysolve {
     }
 }
 ```
+
+## Epilogue
+
+For anyone interested in the secp256k1 parameter lore, I also recommend looking at [this video](https://youtu.be/NGLR2N4EK58). I think it's super cool that _every single_ crypto transaction uses a $G$ value that is still shrouded in some mystery. Hopefully, we will figure out the entire story one day.

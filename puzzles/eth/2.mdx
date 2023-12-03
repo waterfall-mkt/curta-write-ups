@@ -10,7 +10,7 @@ There are 2 steps to the puzzle:
 1. Write a contract that implments `ISolve` and returns the address of [Curta](https://etherscan.io/address/0x0000000006bC8D9e5e9d436217B88De704a9F307) when `curtaPlayer` is called.
 2. Deploy the contract to a _vanity address_ prefixed with specific bytes, then submit the address as the solution.
 
-```sol fileName="Solve.sol" showLineNumbers={false}
+```sol fileName="Solve.sol"
 contract Solve is ISolve {
     function curtaPlayer() external view returns (address) {
         return 0x0000000006bC8D9e5e9d436217B88De704a9F307;
