@@ -1,0 +1,149 @@
+---
+author: '0xBad58e133138549936D2576ebC33251bE841d3e9'
+contributors:
+  ['0xBad58e133138549936D2576ebC33251bE841d3e9', '0xA85572Cd96f1643458f17340b6f0D6549Af482F5']
+adapted_from: 'https://hackmd.io/@IeEhYVhsSYa8OCSUqHthzQ/rJVIJViZn'
+---
+
+## Motivation
+
+The objective of the puzzle was to require a _methodology of study_, rather than an intricate understanding of the puzzle. The puzzle is rather easy to understand, but the solution requires competitors to approach it in a programmatic way to capture the flag.
+
+Since many players have [utilized intense fuzzing or symbolic testing](https://twitter.com/0xkarmacoma/status/1632551527729758208) in the past, I wanted to create a puzzle that would make dissecting the puzzle into parts implausible: it's nearly impossible to isolate parts of the puzzle because the core logic of `verify` is intertwined with the amount of gas used throughout the solve. Hence the name of the puzzle **Uncertainty Principle** and the question that arises:
+
+> How do we measure something, that the sole act of measurement changes its value?
+
+## The challenge
+
+Let's start by breaking down the highlighted portion below:
+
+```sol fileName="Puzzle.sol" highlightLines={[26, 27, 28, 29, 30]}
+// SPDX-License-Identifier: Unlicense
+pragma solidity ^0.8.17;
+
+contract UncertaintyPrinciple is IPuzzle {
+    uint256 constant PLANK_CONSTANT = 0x111; // 1 in XYZ
+    uint256 constant PLANK_LENGTH = 0xF;
+    uint256 constant PHISICAL_SPHERE = type(uint32).max;
+
+    /// @inheritdoc IPuzzle
+    function name() external pure returns (string memory) {
+        return "Uncertainty Principle";
+    }
+
+    /// @inheritdoc IPuzzle
+    function generate(address _seed) external view returns (uint256) {
+        return _gammaFn(uint256(uint160(_seed))) | PLANK_CONSTANT;
+    }
+
+    /// @inheritdoc IPuzzle
+    function verify(uint256 _start, uint256 _solution) external view returns (bool) {
+        uint256 _axis;
+        uint256 _momentum;
+        uint256 _position;
+
+        unchecked {
+            while (_start & PHISICAL_SPHERE > 0) {
+                _position = _axis++ * 4;
+                _momentum = _gammaFn(_solution) & PLANK_LENGTH << _position;
+                for (uint256 _i; _i < _momentum >> _position; _i++) continue;
+                _start -= _momentum;
+            }
+        }
+
+        return true;
+    }
+
+    function _gammaFn(uint256 _xyz) internal view returns (uint256) {
+        /// @notice gasleft() has a directional preference (as entropy)
+        return uint256(keccak256(abi.encodePacked(_xyz, gasleft())));
+    }
+}
+```
+
+26. The last 32 bits of `_start` must eventually equal 0, otherwise the `for` loop will loop forever.
+27. `_position` is the LSb position to start reading 4 bits from `_gammaFn(_solution)` from, and it is incremented by 4 each iteration, so `_position` points to which least significant 4-bit word to read from `_gammaFn(_solution)`.
+28. `_momentum` are the 4 bits read from `_gammaFn(_solution)` at `_position` before it is shifted right to a 4-bit word.
+29. Consume different amounts of gas depending on the value at the 4 bits.
+30. `_momentum` is subtracted from `_start` at the end of each iteration.
+
+<Callout intent="neutral">
+  Essentially, the objective of the puzzle is to compute `_solution` such that repeatedly
+  subtracting a portion of `keccak256(_solution, gasleft())` at each iteration of the loop will
+  eventually result in `_start`'s last 32 bits being 0.
+</Callout>
+
+This poses an interesting set of challenges:
+
+- Since `_gammaFn` hashes `_solution` with `gasleft()` at each iteration, it is nontrivial to solve for `_solution` that'll result in `_start`'s last 32 bits being 0.
+- The solution depends on both the values of `_solution` and gas supplied to the call, so there are 2 variables for the player to compute.
+- Brute-forcing/fuzzing is impractical because if the values are incorrect, instead of reverting and short-circuiting the function, the transaction enters an infinite loop (the "black hole").
+
+## Solving the puzzle
+
+As stated earlier, interpreting the puzzle is not hard, but creating mental frameworks to solve with is. I'm going to go over a few approaches here that avoid some of the most painful aspects.
+
+> To navigate through the event horizon, one must either have no mass or master the gamma function.
+
+### The Theoretical Physicist approach
+
+Consider `_start = 0x123456789abcdef`. `verify` will need to enter the inner `for` loop 15 (`0xf`), 14 (`0xe`), ..., 8 (`0x8`) times (loop terminates when last 32 bits are 0).
+
+Theoretically, knowing this, since the EVM is deterministic, we can _try_ to follow every opcode and pre-calculate the gas left at each loop and compute for `_solution` such that:
+
+```sol showLineNumbers={false}
+   (keccak256(_solution, gasleft_at_iteration_1) & 0x0000000f == 0xf)
+&& (keccak256(_solution, gasleft_at_iteration_2) & 0x000000f0 == 0xe)
+&& (keccak256(_solution, gasleft_at_iteration_3) & 0x00000f00 == 0xd)
+&& (keccak256(_solution, gasleft_at_iteration_4) & 0x0000f000 == 0xc)
+&& (keccak256(_solution, gasleft_at_iteration_5) & 0x000f0000 == 0xb)
+&& (keccak256(_solution, gasleft_at_iteration_6) & 0x00f00000 == 0xa)
+&& (keccak256(_solution, gasleft_at_iteration_7) & 0x0f000000 == 0x9)
+&& (keccak256(_solution, gasleft_at_iteration_8) & 0xf0000000 == 0x8)
+```
+
+### The Experimental Physicist approach
+
+One thing experimental physicists know is that their experiments don't represent the real world, but a controlled representation of the real world. In a similar vein, modifying the contract to log `gasleft()` at each iteration can reveal a lot about how the contract actually behaves.
+
+```diff showLineNumbers={false}
+- function _gammaFn(uint256 _xyz) internal view returns (uint256) {
+-     uint256 _gasLeft = gasleft();
++     console.log(_gasLeft);
+-     return uint256(keccak256(abi.encodePacked(_xyz, _gasLeft)));
+- }
+```
+
+This way, the puzzle becomes easier to solve because the gas left is now logged, and we can solve iteratively, backwards from each logged value. After building up intuition for solving the puzzle with the `console.log` line added in, we can remove it and solve the puzzle without it by reading from the stack directly.
+
+<Callout>
+  **Pro-tip**: [Remix](https://remix.ethereum.org/) has a helpful debugger for viewing stack values.
+</Callout>
+
+### The Solidity Engineer approach
+
+The `generate` function sets the last 3 4-bit words to nonzero values by `OR`ing the starting position with `0x111` to avoid trivially easy cases for certain addresses where `_start` already has all of its last 32 bits equal to 0, and `verify` skips the entire loop (massless objects aren't dragged by black holes). But what if we could compute a particular amount of gas to supply such that the last 32 bits of `_start` start with a few `0`s, and it reduces the number of iterations `verify` goes through?
+
+It turns out, it _is_ possible to calculate the gas limit to provide up to 4 or 5 leading `0`s (i.e. all but the `OR`'d bits).
+
+<Callout>
+  Due to Curta calling the `verify` function, and [EIP-150](https://eips.ethereum.org/EIPS/eip-150),
+  the gas limit supplied to the puzzle contract is $\frac{63}
+  {64}$ of the gas limit supplied to `Curta.solve`.
+</Callout>
+
+Now, with the simplified problem, there is a $\frac{1}{65536}$ probability that a randomly selected value for `_solution` results in a valid solution. Additionally, since the gas limit is a capped, fixed value, brute-forcing until a corresponding `_solution` is found becomes a viable method.
+
+### The Shadowy Super Coder approach
+
+Here are a list of additional tips and intuition to help you solve the puzzle:
+
+- Incorrect solutions result in an infinite loop, so if you're brute-forcing values, it may be smarter to set a lower gas limit (e.g. 200,000) than a higher gas limit (e.g. 30,000,000), even though it has a lower chance of hitting a valid solution,.
+- The number of leading `0`s in a variable modifies the gas spenditure on calldata processing, so constraining `_solution` to a value greater than `1 << 255` fixes the calldata processing costs and removes a variable.
+- For a similar reason, it may help to use a cheatcode like [`vm.etch`](https://book.getfoundry.sh/cheatcodes/etch) to call from the exact Curta address in your fork tests/scripts.
+
+## Conclusion
+
+I had a great time thinking about this game. I wanted to create a puzzle whose solution was Turing complete and would force players to approach it with a scientific mindset. To be honest, I was planning to raise it to the mask to 42 bits (`PHISICAL_SPHERE`), but I figured 32 bits would be challenging enough to achieve the goals I sought out when writing it, without needing hours of brute-force mining.
+
+I hope you had a good time trying to coordinate the entanglement between `generate` and `verify`. I was really surprised about how fast the puzzle got solved, and I'm really sorry for that [one guy who sent 5M gas limit to get stuck in the event horizon](https://etherscan.io/tx/0x696417a7aed58d559862fbcae766cc2653a1d1f7fc9ad3c9dc197664fce77fc3), [twice](https://etherscan.io/tx/0x7e46e425b5fa4930462e15f93baef824f169a856d105cabb69fec3c5045a23fc).
