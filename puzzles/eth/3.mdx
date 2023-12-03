@@ -125,9 +125,9 @@ contract Deployer {
 
 We know that choosing $k=1/2\pmod n$ will give us our $v$ and $r$ value with the required zero bytes. To find the right $h$ value, we can rearrange the equation for $s$. Also, [by looking at other players' solutions on-chain](https://etherscan.io/advanced-filter?fadd=0x0000000006bC8D9e5e9d436217B88De704a9F307&tadd=0x0000000006bC8D9e5e9d436217B88De704a9F307&mtd=0x31468f06%7eSolve&txntype=0&age=2023-03-18%7e2023-03-24), you could have used this equation to solve for $k$.
 
-$$
-s=k^{-1}(h+rd)\pmod n\iff h=ks-rd\pmod n
-$$
+<div className="overflow-x-scroll hide-scrollbar" style={{ display: 'flex', alignItems: 'center' }}>
+  $$ s=k^{-1}(h+rd)\pmod n\iff h=ks-rd\pmod n $$
+</div>
 
 To actually submit the solution, the easiest method to return `h`, `v` and `r` in only 32 bytes of EVM code is to forward the call to another contract that has these values hardcoded. This is what [\@0xkarmacoma](https://twitter.com/0xkarmacoma) and [@eth_call](https://twitter.com/eth_call) deployed at [`0x000000000045e5418329ee1f6d07dc6e73ad0ab0`](https://etherscan.io/address/0x000000000045e5418329ee1f6d07dc6e73ad0ab0).
 
