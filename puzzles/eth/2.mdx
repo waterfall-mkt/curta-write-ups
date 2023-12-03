@@ -1,6 +1,6 @@
 ---
-author: "0xA85572Cd96f1643458f17340b6f0D6549Af482F5"
-contributors: ["0xA85572Cd96f1643458f17340b6f0D6549Af482F5"]
+author: '0xA85572Cd96f1643458f17340b6f0D6549Af482F5'
+contributors: ['0xA85572Cd96f1643458f17340b6f0D6549Af482F5']
 ---
 
 ## Overview
@@ -10,7 +10,7 @@ There are 2 steps to the puzzle:
 1. Write a contract that implments `ISolve` and returns the address of [Curta](https://etherscan.io/address/0x0000000006bC8D9e5e9d436217B88De704a9F307) when `curtaPlayer` is called.
 2. Deploy the contract to a _vanity address_ prefixed with specific bytes, then submit the address as the solution.
 
-```sol fileName="Solve.sol" showLineNumbers={false}
+```sol fileName="Solve.sol"
 contract Solve is ISolve {
     function curtaPlayer() external view returns (address) {
         return 0x0000000006bC8D9e5e9d436217B88De704a9F307;
@@ -31,8 +31,8 @@ If you submitted before the timestamp `1678446000` (March 10, 2023 11 AM; roughl
 - The next 2 bytes were picked from the submitting address based on the block number at submission.
 
 <Callout intent="neutral">
-  If you submitted before the timestamp, you had a time constraint to compute,
-  mine, and execute the entire solution in 256 blocks.
+  If you submitted before the timestamp, you had a time constraint to compute, mine, and execute the
+  entire solution in 256 blocks.
 </Callout>
 
 If you submitted after the timestamp, there was no time constraint, and you just had to mine for a contract with 4 `0` bytes.

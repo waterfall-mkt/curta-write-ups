@@ -1,0 +1,160 @@
+---
+author: '0xB958d9FA0417E116F446D0A06D0326805Ad73Bd5'
+contributors: ['0xB958d9FA0417E116F446D0A06D0326805Ad73Bd5']
+adapted_from: 'https://twitter.com/rileyholterhus/status/1637905710095933441'
+---
+
+## Prologue
+
+Although the challenge is only a few lines of code, solving it involves traveling back ~25 years to when the parameters of the [secp256k1 curve](https://en.bitcoin.it/wiki/Secp256k1) were chosen.
+
+<Image
+  src="/images/doge-secp256k1.png"
+  alt={`A screenshot of Doge with various ECDSA related equations and graphs overlayed.`}
+  width={453}
+  height={467}
+/>
+
+Before we even get to the puzzle, we can take a closer look at the [specification of secp256k1](https://www.secg.org/SEC2-Ver-1.0.pdf) (the curve used by Bitcoin/Ethereum). This was released by Certicom in 2000, but unfortunately, the parameter selection process wasn't super descriptive:
+
+> Parameters associated with a Koblitz curve admit especially efficient implementation. The name Koblitz curve is best-known when used to describe binary anomalous curves over $\mathbb{F}_{2^m}$ which have $a,b\in\{0,1\}$, [9]. Here it is generalized to refer also to curves over $\mathbb{F}_p$ which possess an efficiently computable endomorphism [7]. <span style={{ backgroundColor: "#092e52", color: "#7697ee" }} children="The recommended parameters associated with a Koblitz curve were chosen by repeatedly selecting parameters admitting an efficiently computable endomorphism until a prime order curve was found." />
+
+For discussion about this, we can look at [this Bitcoin Talk discussion](https://bitcointalk.org/index.php?topic=289795.0). Despite the limited documentation, people were able to reverse engineer reasonable explanations for the parameter choices, including:
+
+- $p$ being chosen as a [generalized Mersenne prime](https://en.wikipedia.org/wiki/Solinas_prime) (helps with computing modular reductions).
+- The coefficients ($a$ and $b$) of the curve equation being the smallest values you can choose that result in a prime order (the chosen $a$ and $b$ also allow for the [GLV method optimization](https://link.springer.com/chapter/10.1007/3-540-44647-8_11), which is even more possible explanation).
+
+But despite all this reverse engineering, there was/is no good explanation for how the generator point $G$ was selected. Because of how the other parameters were chosen, pretty much _any_ point on the curve could have been used as $G$, so why not something "normal looking"?
+
+Well, there still isn't a great answer for this. In fact, even more questions arose when Gregory Maxwell discovered the point $G/2$ has an anomalously small $x$-coordinate, as he describes [here](https://crypto.stackexchange.com/questions/60420/what-does-the-special-form-of-the-base-point-of-secp256k1-allow/76010#76010). This $x$-coordinate is basically the same in $G/2$ for _every_ secp\_\_\_k1 curve, which implies there was a common initial $x$-coordinate point that was slightly altered and then doubled to get $G$ for each curve. The value is ~160 bits, which means it could be a SHA1 output.
+
+<ComponentsDisplay className="overflow-x-scroll">
+  <div
+    className="not-prose"
+    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}
+  >
+    <div
+      style={{
+        fontWeight: 400,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '0.125rem',
+      }}
+    >
+      <code style={{ color: '#758195', fontSize: '0.875rem' }}>
+        <span children="0x0000000000000000000000004" />
+        <span children="8ce563f89a0ed9414f5aa28ad0d96d6795f9c6" style={{ color: '#c1cdd9' }} />
+        <span children="2" />
+      </code>
+      <code style={{ color: '#758195', fontSize: '0.875rem' }}>
+        <span children="0x00000000000000000554123b7" />
+        <span children="8ce563f89a0ed9414f5aa28ad0d96d6795f9c6" style={{ color: '#c1cdd9' }} />
+        <span children="6" />
+      </code>
+      <code style={{ color: '#758195', fontSize: '0.875rem' }}>
+        <span children="0x00000000000000000000003b7" />
+        <span children="8ce563f89a0ed9414f5aa28ad0d96d6795f9c6" style={{ color: '#c1cdd9' }} />
+        <span children="3" />
+      </code>
+    </div>
+    <div style={{ fontSize: '0.875rem', color: '#758195' }}>
+      $G/2$ for secp160k1, secp192k1, and secp256k1.
+    </div>
+  </div>
+</ComponentsDisplay>
+
+This only adds to the mystery, since the "doubling" was never documented, doesn't seem necessary, and we don't know this SHA1 preimage. Regardless, the actual choice of $G$ doesn't affect the security of the curve in any way, but it does allow a very interesting "trick" in ECDSA.
+
+As you may know, the first step in [ECDSA](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm) is to choose an integer $k$ to get the $x$ coordinate of $k\times G$ (this is $r$).
+
+<Callout intent="warning">
+  Choosing your own $k$ value in the wild is a bad idea, since there are several ways to leak your
+  private key by doing this.
+</Callout>
+
+But with a toy private key, the property of $G$ we just discussed tells us that setting $k=1/2\pmod n$ will make the $r$ value equal the $x$-coordinate of $G/2$, which has an impossibly large number of zeroes—far more zeroes than you would get with any brute-force method.
+
+<Callout>
+  This trick [was used all the way back in 2015](https://bitcointalk.org/index.php?topic=1118704),
+  when Bitcoin users leveraged this property to save bytes on ransactions that swept dust from
+  accounts with known private keys.
+</Callout>
+
+## Solving the puzzle
+
+At this point, we can finally take a look at the CTF. As you can see, users submit bytecode that returns a valid msg hash + signature for a given private key. The challenge hardcodes a different `s` value for everyone, and requires that the `r` value has 9 leading zero bytes.
+
+```sol fileName="Puzzle.sol" highlightLines={[27]}
+// SPDX-License-Identifier: Unlicense
+pragma solidity ^0.8.17;
+
+contract TinySig is IPuzzle {
+    // This is the address you get by using the private key `0x1`. For this
+    // challenge, make sure you do not use *your own* private key (other than to
+    // initiate the `solve` transaction of course). You only need to use the
+    // private key `0x1` for signing things.
+    address constant SIGNER = 0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf;
+
+    /// @inheritdoc IPuzzle
+    function name() external pure returns (string memory) {
+        return "TinySig";
+    }
+
+    /// @inheritdoc IPuzzle
+    function generate(address _seed) external view returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(_seed)));
+    }
+
+    /// @inheritdoc IPuzzle
+    function verify(uint256 _start, uint256 _solution) external returns (bool) {
+        address target = address(new Deployer(abi.encodePacked(_solution)));
+        (, bytes memory ret) = target.staticcall("");
+        (bytes32 h, uint8 v, bytes32 r) = abi.decode(ret, (bytes32, uint8, bytes32));
+        return (
+            r < bytes32(uint256(1 << 184)) &&
+            ecrecover(h, v, r, bytes32(_start)) == SIGNER
+        );
+    }
+}
+
+contract Deployer {
+    constructor(bytes memory code) { assembly { return (add(code, 0x20), mload(code)) } }
+}
+```
+
+We know that choosing $k=1/2\pmod n$ will give us our $v$ and $r$ value with the required zero bytes. To find the right $h$ value, we can rearrange the equation for $s$. Also, [by looking at other players' solutions on-chain](https://etherscan.io/advanced-filter?fadd=0x0000000006bC8D9e5e9d436217B88De704a9F307&tadd=0x0000000006bC8D9e5e9d436217B88De704a9F307&mtd=0x31468f06%7eSolve&txntype=0&age=2023-03-18%7e2023-03-24), you could have used this equation to solve for $k$.
+
+<div
+  className="not-prose overflow-x-scroll hide-scrollbar"
+  style={{ display: 'flex', justifyContent: 'center' }}
+>
+  $$ s=k^{-1}(h+rd)\pmod n\iff h=ks-rd\pmod n $$
+</div>
+
+To actually submit the solution, the easiest method to return `h`, `v` and `r` in only 32 bytes of EVM code is to forward the call to another contract that has these values hardcoded. This is what the helper contract [\@0xkarmacoma](https://twitter.com/0xkarmacoma) and [@eth_call](https://twitter.com/eth_call) [deployed](https://etherscan.io/address/0x000000000045e5418329ee1f6d07dc6e73ad0ab0) does.
+
+```sol fileName="Tinysolve.sol"
+// SPDX-License-Identifier: Unlicense
+pragma solidity ^0.8.17;
+
+contract Tinysolve {
+    mapping(address => bytes32) public hashes;
+
+    function setHash(bytes32 _hash) external {
+        hashes[msg.sender] = _hash;
+    }
+
+    fallback(bytes calldata) external returns (bytes memory res) {
+        res = abi.encode(
+            hashes[tx.origin],
+            uint8(28),
+            bytes32(0x00000000000000000000003b78ce563f89a0ed9414f5aa28ad0d96d6795f9c63)
+        );
+    }
+}
+```
+
+## Epilogue
+
+For anyone interested in the secp256k1 parameter lore, I also recommend looking at [this video](https://youtu.be/NGLR2N4EK58). I think it's super cool that _every single_ crypto transaction uses a $G$ value that is still shrouded in some mystery. Hopefully, we will figure out the entire story one day.
