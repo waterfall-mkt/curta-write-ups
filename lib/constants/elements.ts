@@ -6,6 +6,7 @@ export const CUSTOM_ELEMENTS = new Set([
   'Image',
   'LinkFeature',
   'LogoIcon',
+  'UserHoverCard',
 ]);
 
 export const HTML_ELEMENTS = new Set([
