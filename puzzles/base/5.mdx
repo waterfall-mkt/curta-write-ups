@@ -1,0 +1,60 @@
+---
+author: '0xfee555e9367b83fb0952a945539faae54f0560a4'
+contributors: ['0xfee555e9367b83fb0952a945539faae54f0560a4']
+adapted_from: 'https://github.com/ret2jazzy/CTF-writeups/blob/3bb3ef603582bdfd805969545b94d4666710bbd0/curta-ctf/ZSafe/README.md'
+---
+
+## Prologue
+
+The inspiration behind this challenge was I really wanted to make a challenge involving `CREATE2` and metamorphic deployments. The first time I learned about `CREATE2`, I was fascinated by all the possibilities, and I had countless ideas throughout the years where I tried shoehorning `CREATE2`. This was the only one that seemed cool enough to make a challenge out of it.
+
+This write-up was adapted from a total of 3 write-ups–Jazzy's (the author) write-up and 2 other write-ups by players–to provide context from both the author's and solvers' perspectives.
+
+- [ZSafe](https://github.com/ret2jazzy/CTF-writeups/blob/3bb3ef603582bdfd805969545b94d4666710bbd0/curta-ctf/ZSafe/README.md) by [Jazzy](https://twitter.com/ret2jazzy)
+- [Curta CTF ZSafe Write-up](https://philogy.github.io/posts/curta-zsafe-writeup/) by [Philogy](https://twitter.com/real_philogy)
+- [Curta ZSafe](https://hackmd.io/@kjsman/curta-zsafe) by [Jinseo Kim](https://twitter.com/csapp3e)
+
+## Overview
+
+<Callout intent="none">
+  The challenge involves 2 main parts: A proxy and some ECDSA.
+</Callout>
+
+The set-up of the challenge is as follows:
+
+<Image
+  src="/images/zsafe-challenge-structure.png"
+  alt="A diagram of the ZSafe challenge: `SafeCurta`, the entry point of the puzzle deploys the `SafeChallenge` and checks whether `isUnlocked` returns `true`"
+  width={2340}
+  height={1153}
+/>
+
+First, the challenge deploys `SafeProxy`, which allows upgrades by `owner`s, but there's a whitelist of codehash-es you can upgrade to.
+
+<Callout intent="none">
+  `SafeProxy` is a ripped implementation from [OpenZeppelin's UUPS proxy](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/e5c63635e3508a8d9d0afed091578cc4bb59a9c7/contracts/proxy/utils/UUPSUpgradeable.sol) because we only want a subset of UUPS functionality.
+</Callout>
+
+Then, the main challenge contract reads a few values off the proxy, performs magic transformations of the read values, and then tries to interpret it as an ECDSA signature in the `unlock` function. The goal is to bypass these checks such that the `SafeChallenge` factory contract you deployed via `SafeCurta.deploy` returns `true` for `isUnlocked`.
+
+## Conclusion
+
+### Philogy
+
+Overall this was a very interesting challenge, taking advantage of some interesting math behind ECDSA and some false assumptions people commonly make about the immutability of code. Highly recommend you try it out, and feel free to check out the [code to my solution](https://github.com/Philogy/curta-zsafe-solution) on GitHub as well. It contains not just the challenge and solution contracts, but the Python script I used to actually run the above math and generate the different values.
+
+<Callout intent="info">
+  Feel free to provide feedback on this post on Twitter (X) or follow [@real_philogy](https://twitter.com/real_philogy) for more smart contract development and CTF content in the future!
+</Callout>
+
+### Jinseo Kim
+
+It was my first time to solve a puzzle on Curta, and it was really fun. Big kudos to Jazzy who invented this puzzle! I was really surprised by its sophistication.
+
+I recommend you to try implementing the solution yourself — It will be definitely enjoyable and educational.
+
+Lastly, this is the obligatory random cat picture:
+
+<Callout intent="info">
+  Follow [@sapp3e](https://twitter.com/sapp3e).
+</Callout>
