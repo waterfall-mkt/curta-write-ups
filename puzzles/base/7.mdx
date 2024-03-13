@@ -6,10 +6,9 @@ adapted_from: 'https://twitter.com/windowhan/status/1767501738930848200'
 
 ## Overview
 
-The code below shows the conditions for solving the problem.
-Initially, users are given 10,000 (10,000 ether) curtaUSD tokens and 10,000 curtaWETH tokens. Using only the assets provided, you must exploit the contract's vulnerabilities to obtain an additional 10,000 curtaUSD and 20,000 curtaWETH Tokens.
+Initially, players are given 10,000 `curtaUSD` tokens and 10,000 `curtaWETH` tokens. Using only these provided assets, the goal is to exploit the contract's vulnerabilities to obtain an additional 10,000 `curtaUSD` and 20,000 `curtaWETH` tokens. The following code snippet implements these conditions:
 
-```sol showLineNumbers={false}
+```sol highlightLines={[3, 4, 14, 15]} showLineNumbers={false}
 function createChallenge(uint256 seed, address player) external onlyOwner returns (address) {
     ...
     CurtaToken(usdClone).mint(player, 10000 ether);
@@ -30,14 +29,26 @@ function isSolved() external view returns (bool) {
 }
 ```
 
-Let's delve into how the problem environment is configured.
-A summary of the code documented in the image is as follows:
-- A total of 3 markets are created in the Lending Market: CurtaUSD, CurtaWETH, and CurtaRebasingWETH.
-- The Oracle records the price of CurtaUSD at 1e18, CurtaWETH at 3000e18, and CurtaRebasingWETH at 3100e18.
-- The interest rate for the CurtaUSD Lending Market is set at 5%, with a borrow LTV (Loan-to-Value) of 80%, a liquidation LTV of 90%, and a liquidation bonus of 5%.
-- The CurtaWETH Lending Market has an interest rate of 3%, a borrow LTV of 70%, a liquidation LTV of 80%, and a liquidation bonus of 5%.
-- The CurtaRebasingWETH Lending Market also features an interest rate of 3%, a borrow LTV of 70%, a liquidation LTV of 80%, and a liquidation bonus of 5%.
-- Each of the three markets initially has a liquidity of 10,000 units, and players are provided with 10,000 units of CurtaUSD and 10,000 units of CurtaWETH.
+### Starting position breakdown
+
+<Callout>
+  You begin the challenge by calling `deploy` on [`FailedLendingMarket`](https://basescan.org/address/0xc0894a610f48dc195febb409b55497b670d448d0#code),
+  the challenge contract, which deploys an instance of the challenge contract
+  with the starting conditions.
+</Callout>
+
+Now, let's delve into how the problem environment is configured. The following is a summary of what happens when the problem is created for a player:
+
+1. 3 lending markets (instances of `CurtaLending`) are created: `CurtaUSD`, `CurtaWETH`, and `CurtaRebasingWETH`.
+2. The oracle contract `Oracle` records the price of `CurtaUSD` as `1e18`, `CurtaWETH` as `3_000e18`, and `CurtaRebasingWETH` as `3_100e18`.
+3. `CurtaUSD`'s interest rate is set to 5% with a borrow [loan-to-value](https://coinmarketcap.com/academy/glossary/loan-to-value-ltv) (LTV) of 80%, a liquidation LTV of 90%, and a liquidation bonus of 5%.
+4. `CurtaWETH`'s interest rate is set to 3% with a borrow LTV of 70%, a liquidation LTV of 80%, and a liquidation bonus of 5%.
+5. Similarly to `CurtaWETH`, `CurtaRebasingWETH`'s interest rate is also set to 3% with a borrow LTV of 70%, a liquidation LTV of 80%, and a liquidation bonus of 5%.
+6. Each of the three lending markets are seeded with `10_000 ether` of liquidity, and players are supplied with `10_000 ether` of `CurtaUSD` and `10_000 ether` of `CurtaWETH`.
+
+<Callout>
+  The following code segment is equivalent to the summary above.
+</Callout>
 
 ```sol showLineNumbers={false}
 function createChallenge(uint256 seed, address player) external onlyOwner returns (address) {
@@ -82,26 +93,38 @@ function createChallenge(uint256 seed, address player) external onlyOwner return
 }
 ```
 
-
 ## Solution
 
-The functions that users can call in the CurtaLending contract are as follows:
-- depositCollateral
-- withdrawCollateral
-- depositLiquidity
-- withdrawLiquidity
-- borrow
-- repay
-- liquidate
-- resetBorrowAsset
-- burnBadDebt
-- claimReward
-- accrueInterest
-- updateAsset
-
-By examining the code of the withdrawCollateral function, you can find suspicious code.
+The functions that players can call in each of the `CurtaLending` contracts are as follows:
 
 ```sol showLineNumbers={false}
+function depositCollateral(address asset, uint256 amount) external;
+function withdrawCollateral(address asset, uint256 amount) external;
+function depositLiquidity(address asset, uint256 amount) external;
+function withdrawLiquidity(address asset, uint256 amount) external;
+function borrow(address collateral, address borrowAsset, uint256 amount) external;
+function repay(address collateral, uint256 amount) external;
+function liquidate(address user, address collateral, uint256 amount) external;
+function resetBorrowAsset(address collateral) external;
+function burnBadDebt(address user, address collateral) external;
+function claimReward(address asset, uint256 amount) external;
+function accrueInterest(address user, address asset) public;
+function updateAsset(address asset) public;
+```
+
+By examining the code of the `withdrawCollateral` function, you can find a vulnerability that allows you to bypass the [health factor](https://docs.aave.com/faq/borrowing#what-is-the-health-factor) check.
+
+<Callout>
+  The **health factor** is the ratio of the value of your deposited assets
+  against the borrowed assets and its underlying value. Lending markets use this
+  metric to determine if a position is healthy or not.
+</Callout>
+
+The formula used to calculate the value of the collateral by its quantity is `_userInfo.collateralAmount - amount`. However, when `amount` is 0, the contract intends to withdraw all the collateral. This means that the health factor is calculated based on the state _before_ the withdrawal of the collateral, allowing an attacker to bypass the code that checks if the position is healthy.
+
+Consequently, it leads to bad debt.
+
+```sol highlightLines={[7, 15]} showLineNumbers={false}
 function withdrawCollateral(address asset, uint256 amount) external {
     accrueInterest(msg.sender, asset);
 
@@ -127,20 +150,11 @@ function withdrawCollateral(address asset, uint256 amount) external {
 }
 ```
 
-Pay close attention to where the Health Factor is checked in the withdrawCollateral function.
+By exploiting this vulnerability, you can solve the challenge.
 
-The formula used to calculate the value of the collateral by its quantity is `_userInfo.collateralAmount - amount`.
+## Solve script
 
-However, when the amount is 0, it intends to withdraw all the collateral.
-
-This means that the health factor is calculated based on the state before the withdrawal of the collateral, allowing an attacker to bypass the code that checks if the position is healthy.
-
-Consequently, it leads to bad debt.
-
-I managed to solve the challenge by exploiting this vulnerability.
-
-
-## POC
+Check out our solve test below for more details.
 
 ```sol fileName="Solve.s.sol"
 // SPDX-License-Identifier: UNLICENSED
@@ -240,7 +254,6 @@ contract Helper3 {
     }
 }
 
-
 contract Helper4 {
     CurtaToken public curtaUSD;
     CurtaToken public curtaWETH;
@@ -306,7 +319,6 @@ contract Helper5 {
     }
 }
 
-
 contract Helper6 {
     CurtaToken public curtaUSD;
     CurtaToken public curtaWETH;
@@ -337,7 +349,6 @@ contract Helper6 {
 
     }
 }
-
 
 contract CounterScript is Script {
     address public prob = 0xc0894A610f48dc195FEbb409b55497b670D448d0;
