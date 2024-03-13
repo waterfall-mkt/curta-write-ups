@@ -47,6 +47,10 @@ Puzzles added to Curta on Base at [`0x00000000d1329c5cd5386091066d49112e590969`]
 | 2   | [Link](/puzzles/base/2.mdx) | [Link](https://curta.wtf/puzzle/base:2/write-up) | [Link](https://curta.wtf/puzzle/base:2) | [Link](https://github.com/chainlight-io/publications/blob/417d1475d3b7057db6e0da2cbaba6104576f3d20/ctf-writeups/curta-cup/AddressGame/writeup.md)      |
 | 3   | [Link](/puzzles/base/3.mdx) | [Link](https://curta.wtf/puzzle/base:3/write-up) | [Link](https://curta.wtf/puzzle/base:3) | [Link](https://github.com/chainlight-io/publications/blob/417d1475d3b7057db6e0da2cbaba6104576f3d20/ctf-writeups/curta-cup/LatentRisk/writeup.md)       |
 | 4   | [Link](/puzzles/base/4.mdx) | [Link](https://curta.wtf/puzzle/base:4/write-up) | [Link](https://curta.wtf/puzzle/base:4) | [Link](https://github.com/chainlight-io/publications/tree/417d1475d3b7057db6e0da2cbaba6104576f3d20/ctf-writeups/curta-cup/PairAssetManager/writeup.md) |
+| 5   | WIP                         | WIP                                              | [Link](https://curta.wtf/puzzle/base:5) | None                                                                                                                                                   |
+| 6   | WIP                         | WIP                                              | [Link](https://curta.wtf/puzzle/base:6) | None                                                                                                                                                   |
+| 7   | [Link](/puzzles/base/7.mdx) | [Link](https://curta.wtf/puzzle/base:7/write-up) | [Link](https://curta.wtf/puzzle/base:7) | [Link](https://twitter.com/windowhan/status/1767501738930848200)                                                                                       |
+| 8   | WIP                         | WIP                                              | [Link](https://curta.wtf/puzzle/base:8) | None                                                                                                                                                   |
 
 ## Contributing (WIP)
 
