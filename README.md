@@ -51,6 +51,7 @@ Puzzles added to Curta on Base at [`0x00000000d1329c5cd5386091066d49112e590969`]
 | 6   | WIP                         | WIP                                              | [Link](https://curta.wtf/puzzle/base:6) | None                                                                                                                                                   |
 | 7   | [Link](/puzzles/base/7.mdx) | [Link](https://curta.wtf/puzzle/base:7/write-up) | [Link](https://curta.wtf/puzzle/base:7) | [Link](https://twitter.com/windowhan/status/1767501738930848200)                                                                                       |
 | 8   | WIP                         | WIP                                              | [Link](https://curta.wtf/puzzle/base:8) | None                                                                                                                                                   |
+| 8   | WIP                         | WIP                                              | [Link](https://curta.wtf/puzzle/base:8) | None                                                                                                                                                   |
 
 ## Contributing (WIP)
 
